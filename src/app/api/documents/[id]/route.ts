@@ -6,6 +6,12 @@ import { readUpload } from '@/lib/storage';
 /**
  * Uploaded files are never publicly linkable: every request is authenticated and
  * the bytes are streamed from the private volume, never served as a static asset.
+ *
+ * Access is deliberately flat — any signed-in user may open any document. That
+ * matches the rest of the CRM, where a read-only Viewer already sees every
+ * client record, note and commission; narrowing documents alone would imply a
+ * per-record model the app does not have. Revisit this before giving a Viewer
+ * login to anyone outside the core team.
  */
 export async function GET(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const user = await getCurrentUser();

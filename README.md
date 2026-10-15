@@ -95,15 +95,31 @@ listed in `.env.example`.
 ## Tests
 
 ```bash
-npm test          # unit tests
+npm test          # unit and integration tests
 npm run typecheck
 npm run build
 ```
+
+Integration tests under `tests/integration/` talk to the database in
+`DATABASE_URL`, so point that at a throwaway Postgres rather than anything real.
+They cover the things a mock cannot prove: the atomic rate-limit counter, and the
+optimistic-locking guard that stops two advisors silently overwriting each other.
+
+## Concurrency
+
+`Client.version` is incremented on every write and submitted as a hidden field by
+the edit form. A save carrying a stale version matches no row and is rejected with
+a message, rather than reverting the other person's work across every field. The
+record update and its audit rows are written in one transaction, so a change can
+never land without a trace of who made it.
 
 ## Data rules
 
 - No passports, identity documents, source-of-funds evidence or bank details. The
   attorney holds those.
-- Uploads are private: every download goes through an authenticated route.
+- Uploads are private: every download goes through an authenticated route. Access
+  is flat by design — any signed-in user may open any document, matching the fact
+  that a read-only Viewer already sees every client record and commission. Revisit
+  this before issuing a Viewer login to anyone outside the core team.
 - Status changes are written to an audit log with actor and timestamp.
 - Marketing consent is per client and off by default for every migrated record.

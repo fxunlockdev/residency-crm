@@ -1,10 +1,10 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { leadIntakeSchema } from '@/lib/validation';
-import { recordAudit } from '@/lib/audit';
+import { auditRow } from '@/lib/audit';
 import { nextReference } from '@/server/reference';
 import { normalizeCountry, normalizeEmail, normalizePhone, toTitleCase } from '@/lib/normalize';
-import { pruneRateLimits, rateLimit } from '@/lib/rate-limit';
+import { pruneRateLimits, rateLimitSafe } from '@/lib/rate-limit';
 import { clientIpFrom, safeEqual } from '@/lib/client-ip';
 import { Prisma } from '@prisma/client';
 
@@ -50,12 +50,17 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorised' }, { status: 401, headers });
   }
 
-  pruneRateLimits();
+  // Pruning on roughly one request in fifty keeps the table small without
+  // adding a delete to every submission.
+  if (Math.random() < 0.02) await pruneRateLimits().catch(() => undefined);
+
   // X-Forwarded-For is client-writable, so the per-IP bucket alone can be rotated
   // away. A global bucket keyed on nothing the caller controls is the real ceiling.
   const ip = clientIpFrom(request.headers);
-  const perIp = rateLimit(`lead:ip:${ip}`, 10, 60_000);
-  const global = rateLimit('lead:global', 120, 60_000);
+  const [perIp, global] = await Promise.all([
+    rateLimitSafe(`lead:ip:${ip}`, 10, 60_000),
+    rateLimitSafe('lead:global', 120, 60_000),
+  ]);
   if (!perIp.allowed || !global.allowed) {
     const retryAfter = Math.max(perIp.retryAfter, global.retryAfter);
     return NextResponse.json(
@@ -101,31 +106,103 @@ export async function POST(request: NextRequest) {
 
   const notes = input.message ? `Website enquiry:\n\n${input.message}` : null;
 
+  // A double submit, a back-button resubmit or a second enquiry from the same
+  // person should enrich the existing record, not create a duplicate one.
+  const existing = email
+    ? await prisma.client.findFirst({
+        where: { email },
+        orderBy: { createdAt: 'desc' },
+        select: { id: true, status: true, gclid: true, notes: true },
+      })
+    : null;
+
+  if (existing) {
+    await prisma.$transaction(async (tx) => {
+      await tx.client.update({
+        where: { id: existing.id },
+        data: {
+          // Latest attribution wins; earlier values are kept when this
+          // submission carries none.
+          gclid: gclid ?? existing.gclid,
+          utmSource: input.utmSource ?? undefined,
+          utmMedium: input.utmMedium ?? undefined,
+          utmCampaign: input.utmCampaign ?? undefined,
+          keyword: input.keyword ?? undefined,
+          landingPage: input.landingPage ?? undefined,
+          phone: phone ?? undefined,
+          // Consent is only ever turned on by an explicit tick, never off.
+          ...(input.marketingConsent === true ? { marketingConsent: true } : {}),
+          notes: notes ? [existing.notes, notes].filter(Boolean).join('\n\n---\n\n') : undefined,
+          version: { increment: 1 },
+        },
+      });
+
+      await tx.auditLog.create({
+        data: auditRow({
+          entity: 'Client',
+          entityId: existing.id,
+          action: 'updated',
+          actorLabel: 'Website form',
+          summary: 'Repeat website enquiry merged into the existing record',
+        }),
+      });
+    });
+
+    return NextResponse.json({ ok: true }, { status: 200, headers });
+  }
+
   let client: { id: string; reference: string; fullName: string } | null = null;
   for (let attempt = 0; attempt < 5 && !client; attempt += 1) {
     try {
-      client = await prisma.client.create({
-        data: {
-          reference: await nextReference(),
-          fullName: toTitleCase(input.fullName),
-          email,
-          phone,
-          countryOfResidence: normalizeCountry(input.countryOfResidence ?? null),
-          countryOfBirth: normalizeCountry(input.countryOfBirth ?? null),
-          source,
-          sourceRaw: input.utmSource ?? 'website-form',
-          status: 'PROSPECT',
-          marketingConsent: input.marketingConsent === true,
-          notes,
-          gclid,
-          utmSource: input.utmSource ?? null,
-          utmMedium: input.utmMedium ?? null,
-          utmCampaign: input.utmCampaign ?? null,
-          keyword: input.keyword ?? null,
-          landingPage: input.landingPage ?? null,
-          leadDate: new Date(),
-        },
-        select: { id: true, reference: true, fullName: true },
+      // The client and its conversion event are written together: a failure
+      // after the client lands would otherwise leave the visitor retrying and
+      // creating duplicates.
+      client = await prisma.$transaction(async (tx) => {
+        const created = await tx.client.create({
+          data: {
+            reference: await nextReference(),
+            fullName: toTitleCase(input.fullName),
+            email,
+            phone,
+            countryOfResidence: normalizeCountry(input.countryOfResidence ?? null),
+            countryOfBirth: normalizeCountry(input.countryOfBirth ?? null),
+            source,
+            sourceRaw: input.utmSource ?? 'website-form',
+            status: 'PROSPECT',
+            marketingConsent: input.marketingConsent === true,
+            notes,
+            gclid,
+            utmSource: input.utmSource ?? null,
+            utmMedium: input.utmMedium ?? null,
+            utmCampaign: input.utmCampaign ?? null,
+            keyword: input.keyword ?? null,
+            landingPage: input.landingPage ?? null,
+            leadDate: new Date(),
+          },
+          select: { id: true, reference: true, fullName: true },
+        });
+
+        // The Lead conversion is queued only when a click id exists.
+        await tx.conversionEvent.create({
+          data: {
+            clientId: created.id,
+            type: 'LEAD',
+            gclid,
+            status: gclid ? 'PENDING' : 'SKIPPED',
+          },
+        });
+
+        await tx.auditLog.create({
+          data: auditRow({
+            entity: 'Client',
+            entityId: created.id,
+            action: 'created',
+            actorLabel: 'Website form',
+            summary: `Website enquiry created ${created.fullName} (${created.reference})`,
+          }),
+        });
+
+        return created;
       });
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') continue;
@@ -136,24 +213,6 @@ export async function POST(request: NextRequest) {
   if (!client) {
     return NextResponse.json({ error: 'Could not record the enquiry.' }, { status: 500, headers });
   }
-
-  // The Lead conversion is the online one; it is queued only when a click id exists.
-  await prisma.conversionEvent.create({
-    data: {
-      clientId: client.id,
-      type: 'LEAD',
-      gclid,
-      status: gclid ? 'PENDING' : 'SKIPPED',
-    },
-  });
-
-  await recordAudit({
-    entity: 'Client',
-    entityId: client.id,
-    action: 'created',
-    actorLabel: 'Website form',
-    summary: `Website enquiry created ${client.fullName} (${client.reference})`,
-  });
 
   // The reference is sequential, so returning it would leak the size of the book.
   return NextResponse.json({ ok: true }, { status: 201, headers });

@@ -1,6 +1,10 @@
 import 'server-only';
+import type { Prisma } from '@prisma/client';
 import { prisma } from './prisma';
 import type { CurrentUser } from './auth';
+
+/** Either the client or an interactive transaction — both expose the same writes. */
+type Db = Pick<typeof prisma, 'auditLog'> | Prisma.TransactionClient;
 
 type AuditInput = {
   entity: 'Client' | 'Meeting' | 'Commission' | 'Document' | 'User';
@@ -15,8 +19,8 @@ type AuditInput = {
   actorLabel?: string;
 };
 
-export async function recordAudit(input: AuditInput): Promise<void> {
-  await prisma.auditLog.create({
+export async function recordAudit(input: AuditInput, db: Db = prisma): Promise<void> {
+  await db.auditLog.create({
     data: {
       entity: input.entity,
       entityId: input.entityId,
@@ -29,6 +33,21 @@ export async function recordAudit(input: AuditInput): Promise<void> {
       actorLabel: input.actor?.name ?? input.actorLabel ?? 'System',
     },
   });
+}
+
+/** Shape an audit row without writing it, for batching inside a transaction. */
+export function auditRow(input: AuditInput): Prisma.AuditLogCreateManyInput {
+  return {
+    entity: input.entity,
+    entityId: input.entityId,
+    action: input.action,
+    field: input.field ?? null,
+    oldValue: input.oldValue ?? null,
+    newValue: input.newValue ?? null,
+    summary: input.summary ?? null,
+    actorId: input.actor?.id ?? null,
+    actorLabel: input.actor?.name ?? input.actorLabel ?? 'System',
+  };
 }
 
 /** Diff two flat records and return one audit row per changed field. */

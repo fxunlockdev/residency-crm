@@ -186,7 +186,7 @@ async function main(): Promise<void> {
 /** Highest numeric reference already allocated, so the import continues from it. */
 async function highestReference(): Promise<number> {
   const rows = await prisma.$queryRaw<Array<{ max: number | null }>>`
-    SELECT MAX(NULLIF(regexp_replace("reference", '\D', '', 'g'), '')::bigint) AS max FROM "Client"
+    SELECT MAX(NULLIF(regexp_replace("reference", '[^0-9]', '', 'g'), '')::bigint) AS max FROM "Client"
   `;
   const max = Number(rows[0]?.max ?? 0);
   return Number.isFinite(max) ? max : 0;

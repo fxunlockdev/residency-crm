@@ -4,7 +4,10 @@ import path from 'node:path';
 export default defineConfig({
   test: {
     environment: 'node',
-    include: ['tests/unit/**/*.test.ts'],
+    include: ['tests/unit/**/*.test.ts', 'tests/integration/**/*.test.ts'],
+    setupFiles: ['tests/setup-env.ts'],
+    // Integration tests share one database, so they must not run concurrently.
+    fileParallelism: false,
     coverage: { reporter: ['text', 'html'], include: ['src/lib/**'] },
   },
   resolve: {

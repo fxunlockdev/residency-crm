@@ -7,6 +7,7 @@ import { prisma } from './prisma';
 import {
   SESSION_COOKIE,
   SESSION_MAX_AGE_SECONDS,
+  isSupersededByPasswordChange,
   signSessionToken,
   verifySessionToken,
   type SessionPayload,
@@ -39,17 +40,24 @@ export async function endSession(): Promise<void> {
   cookieStore.delete(SESSION_COOKIE);
 }
 
-/** The signed-in user, re-read from the database so deactivation takes effect immediately. */
+/**
+ * The signed-in user, re-read from the database so deactivation, demotion and
+ * password resets all take effect on the next request rather than whenever the
+ * 12-hour token happens to expire.
+ */
 export async function getCurrentUser() {
   const cookieStore = await cookies();
   const payload = await verifySessionToken(cookieStore.get(SESSION_COOKIE)?.value);
   if (!payload) return null;
   const user = await prisma.user.findUnique({
     where: { id: payload.sub },
-    select: { id: true, email: true, name: true, role: true, isActive: true },
+    select: { id: true, email: true, name: true, role: true, isActive: true, passwordChangedAt: true },
   });
   if (!user || !user.isActive) return null;
-  return user;
+  if (isSupersededByPasswordChange(payload.issuedAt, user.passwordChangedAt)) return null;
+
+  const { passwordChangedAt: _passwordChangedAt, ...current } = user;
+  return current;
 }
 
 export type CurrentUser = NonNullable<Awaited<ReturnType<typeof getCurrentUser>>>;

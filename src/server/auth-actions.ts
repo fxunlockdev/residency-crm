@@ -6,7 +6,7 @@ import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { endSession, startSession, verifyPassword } from '@/lib/auth';
 import { recordAudit } from '@/lib/audit';
-import { pruneRateLimits, rateLimit } from '@/lib/rate-limit';
+import { pruneRateLimits, rateLimitSafe } from '@/lib/rate-limit';
 import { clientIpFrom } from '@/lib/client-ip';
 import { safeRedirectTarget } from '@/lib/safe-redirect';
 
@@ -33,11 +33,13 @@ export async function loginAction(_previous: LoginState, formData: FormData): Pr
 
   // Online guessing is only bounded by bcrypt otherwise, and a failed attempt
   // should be visible to an administrator in the audit log.
-  pruneRateLimits();
+  if (Math.random() < 0.05) await pruneRateLimits().catch(() => undefined);
   const requestHeaders = await headers();
   const ip = clientIpFrom(requestHeaders);
-  const perAccount = rateLimit(`login:account:${email.toLowerCase()}`, 8, 15 * 60_000);
-  const perIp = rateLimit(`login:ip:${ip}`, 20, 15 * 60_000);
+  const [perAccount, perIp] = await Promise.all([
+    rateLimitSafe(`login:account:${email.toLowerCase()}`, 8, 15 * 60_000),
+    rateLimitSafe(`login:ip:${ip}`, 20, 15 * 60_000),
+  ]);
   if (!perAccount.allowed || !perIp.allowed) {
     const retryAfter = Math.max(perAccount.retryAfter, perIp.retryAfter);
     const minutes = Math.max(1, Math.ceil(retryAfter / 60));

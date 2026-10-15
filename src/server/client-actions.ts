@@ -5,7 +5,7 @@ import { redirect } from 'next/navigation';
 import { Prisma, type ClientStatus } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { AuthError, requireRoleOrThrow, requireRoleOrRedirect } from '@/lib/auth';
-import { diffFields, recordAudit } from '@/lib/audit';
+import { auditRow, diffFields, recordAudit } from '@/lib/audit';
 import { clientSchema, fieldErrors } from '@/lib/validation';
 import { backfillStatusDate, commissionTriggerFor, conversionTypeFor, stagesCrossed } from '@/lib/status-rules';
 import { STATUS_LABEL, STATUS_ORDER } from '@/lib/pipeline';
@@ -13,7 +13,13 @@ import { todayUtc } from '@/lib/dates';
 import { removeUpload } from '@/lib/storage';
 import { nextReference } from './reference';
 
-export type FormState = { errors?: Record<string, string>; message?: string; ok?: boolean };
+export type FormState = {
+  errors?: Record<string, string>;
+  message?: string;
+  ok?: boolean;
+  /** Set when the save lost a race: the form should be reloaded, not retried. */
+  conflict?: boolean;
+};
 
 function readForm(formData: FormData) {
   return Object.fromEntries(formData.entries());
@@ -149,23 +155,49 @@ export async function updateClientAction(
     ...backfill,
   };
 
-  await prisma.client.update({ where: { id: clientId }, data });
-
   const changes = diffFields(existing as unknown as Record<string, unknown>, data as Record<string, unknown>);
-  for (const change of changes) {
-    await recordAudit({
-      entity: 'Client',
-      entityId: clientId,
-      action: change.field === 'status' ? 'status_changed' : 'updated',
-      field: change.field,
-      oldValue: change.oldValue,
-      newValue: change.newValue,
-      actor: user,
-      summary:
-        change.field === 'status'
-          ? `${user.name} moved ${existing.fullName} to ${STATUS_LABEL[input.status]}`
-          : `${user.name} updated ${labelForField(change.field)} on ${existing.fullName}`,
+
+  // The write and its audit rows land together, so a failure can never leave a
+  // changed record with no trace of who changed it. The version in the WHERE
+  // clause is the concurrency guard: a stale form matches nothing.
+  const applied = await prisma.$transaction(async (tx) => {
+    const result = await tx.client.updateMany({
+      where: { id: clientId, version: input.version },
+      data: { ...data, version: { increment: 1 } },
     });
+    if (result.count === 0) return false;
+
+    if (changes.length > 0) {
+      await tx.auditLog.createMany({
+        data: changes.map((change) =>
+          auditRow({
+            entity: 'Client',
+            entityId: clientId,
+            action: change.field === 'status' ? 'status_changed' : 'updated',
+            field: change.field,
+            oldValue: change.oldValue,
+            newValue: change.newValue,
+            actor: user,
+            summary:
+              change.field === 'status'
+                ? `${user.name} moved ${existing.fullName} to ${STATUS_LABEL[input.status]}`
+                : `${user.name} updated ${labelForField(change.field)} on ${existing.fullName}`,
+          }),
+        ),
+      });
+    }
+    return true;
+  });
+
+  if (!applied) {
+    // Someone else saved while this form was open. Reverting their work
+    // silently is worse than making the user look at what changed.
+    return {
+      message:
+        'This record was changed by someone else while you had it open. ' +
+        'Reload to see their changes, then reapply yours.',
+      conflict: true,
+    };
   }
 
   if (statusChanged) {
@@ -195,7 +227,7 @@ export async function changeStatusAction(formData: FormData): Promise<void> {
   // once cannot both run their side effects against a stale starting stage.
   const moved = await prisma.client.updateMany({
     where: { id: clientId, status: existing.status },
-    data: { status, ...backfill },
+    data: { status, ...backfill, version: { increment: 1 } },
   });
   if (moved.count === 0) {
     revalidatePath(`/clients/${clientId}`);

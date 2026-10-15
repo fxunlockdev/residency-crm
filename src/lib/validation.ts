@@ -50,6 +50,13 @@ const checkbox = z
   .transform((value) => value === 'on' || value === 'true');
 
 export const clientSchema = z.object({
+  /** The version the edit form was rendered from; absent when creating. */
+  version: z
+    .union([z.string(), z.number(), z.null(), z.undefined()])
+    .transform((value) => {
+      const parsedValue = typeof value === 'number' ? value : Number(String(value ?? '').trim());
+      return Number.isSafeInteger(parsedValue) && parsedValue >= 0 ? parsedValue : 0;
+    }),
   fullName: z.string().trim().min(2, 'Enter the applicant’s full name.').max(160),
   email: optionalEmail,
   secondaryEmail: optionalEmail,

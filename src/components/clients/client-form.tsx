@@ -41,9 +41,24 @@ export function ClientForm({
 
   return (
     <form action={formAction} className="pb-24" noValidate>
+      {/* Carries the version this form was rendered from, so a save that lost a
+          race is rejected rather than quietly overwriting the other edit. */}
+      <input type="hidden" name="version" value={client?.version ?? 0} />
+
       {state.message ? (
         <div className="mb-6">
-          <Alert tone={state.ok ? 'success' : 'error'}>{state.message}</Alert>
+          <Alert tone={state.ok ? 'success' : 'error'} title={state.conflict ? 'Someone else got there first' : undefined}>
+            {state.message}
+            {state.conflict ? (
+              <button
+                type="button"
+                onClick={() => window.location.reload()}
+                className="btn-ghost mt-3"
+              >
+                Reload with their changes
+              </button>
+            ) : null}
+          </Alert>
         </div>
       ) : null}
 

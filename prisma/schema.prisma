@@ -80,22 +80,23 @@ enum ConversionStatus {
 }
 
 model User {
-  id           String    @id @default(cuid())
-  email        String    @unique
-  name         String
-  passwordHash String
-  role         Role      @default(VIEWER)
-  isActive     Boolean   @default(true)
-  lastLoginAt  DateTime?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  id                String    @id @default(cuid())
+  email             String    @unique
+  name              String
+  passwordHash      String
+  role              Role      @default(VIEWER)
+  isActive          Boolean   @default(true)
+  lastLoginAt       DateTime?
+  /// Tokens issued before this moment are rejected, so a password reset ends
+  /// every live session rather than leaving them valid for up to 12 hours.
+  passwordChangedAt DateTime  @default(now())
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
   ownedClients Client[]   @relation("ClientOwner")
   auditLogs    AuditLog[]
   meetings     Meeting[]
   documents    Document[]
-
-  @@index([email])
 }
 
 model RegionalCentre {
@@ -123,6 +124,9 @@ model Project {
 model Client {
   id        String @id @default(cuid())
   reference String @unique
+  /// Bumped on every write. The edit form submits the version it loaded, so a
+  /// stale save is rejected instead of silently reverting another user's work.
+  version   Int    @default(0)
 
   // Identity
   fullName       String
@@ -205,6 +209,8 @@ model Client {
   @@index([source])
   @@index([gclid])
   @@index([lastName])
+  @@index([countryOfBirth])
+  @@index([updatedAt])
 }
 
 model Meeting {
@@ -224,6 +230,7 @@ model Meeting {
   updatedAt DateTime @updatedAt
 
   @@index([clientId, occurredAt])
+  @@index([occurredAt])
 }
 
 model Commission {
@@ -297,6 +304,16 @@ model AuditLog {
 
   @@index([entity, entityId])
   @@index([createdAt])
+}
+
+/// Rate-limit counters. In Postgres rather than process memory so the limits
+/// are not multiplied by replica count or reset by every redeploy.
+model RateLimit {
+  key     String   @id
+  count   Int      @default(0)
+  resetAt DateTime
+
+  @@index([resetAt])
 }
 
 model ConversionEvent {

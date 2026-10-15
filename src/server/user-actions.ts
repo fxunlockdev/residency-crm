@@ -75,7 +75,9 @@ export async function updateUserAction(userId: string, _previous: FormState, for
         name,
         email,
         role,
-        ...(password ? { passwordHash: await hashPassword(password) } : {}),
+        // Stamping this invalidates every token issued before now, so a reset
+        // on a compromised account ends the attacker's live session.
+        ...(password ? { passwordHash: await hashPassword(password), passwordChangedAt: new Date() } : {}),
       },
     });
   } catch (error) {

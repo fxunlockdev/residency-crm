@@ -11,7 +11,7 @@ import { formatReference } from '@/lib/normalize';
  */
 export async function nextReference(): Promise<string> {
   const rows = await prisma.$queryRaw<Array<{ max: number | null }>>`
-    SELECT MAX(NULLIF(regexp_replace("reference", '\D', '', 'g'), '')::bigint) AS max FROM "Client"
+    SELECT MAX(NULLIF(regexp_replace("reference", '[^0-9]', '', 'g'), '')::bigint) AS max FROM "Client"
   `;
   const current = Number(rows[0]?.max ?? 0);
   return formatReference((Number.isFinite(current) ? current : 0) + 1);
