@@ -4,8 +4,15 @@ import { clientIpFrom, safeEqual } from '@/lib/client-ip';
 const headers = (values: Record<string, string>) => new Headers(values);
 
 describe('clientIpFrom', () => {
-  it('trusts the entry the proxy appended, not the one the client sent', () => {
-    // An attacker prepends their own value; the real address is appended last.
+  it('prefers x-real-ip, which the proxy sets and the client cannot forge', () => {
+    expect(
+      clientIpFrom(headers({ 'x-real-ip': '198.51.100.4', 'x-forwarded-for': '1.1.1.1, 10.0.0.1' })),
+    ).toBe('198.51.100.4');
+  });
+
+  it('never trusts the entry the client prepended', () => {
+    // On Railway the rightmost entry is the edge's own rotating hop, so this is
+    // a fallback rather than a guarantee — but it is never the client's value.
     expect(clientIpFrom(headers({ 'x-forwarded-for': '1.1.1.1, 203.0.113.9' }))).toBe('203.0.113.9');
   });
 
@@ -13,8 +20,7 @@ describe('clientIpFrom', () => {
     expect(clientIpFrom(headers({ 'x-forwarded-for': '  203.0.113.9  ' }))).toBe('203.0.113.9');
   });
 
-  it('falls back to x-real-ip, then to a constant', () => {
-    expect(clientIpFrom(headers({ 'x-real-ip': '198.51.100.4' }))).toBe('198.51.100.4');
+  it('falls back to a constant when nothing identifies the caller', () => {
     expect(clientIpFrom(headers({}))).toBe('unknown');
   });
 

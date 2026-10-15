@@ -1,11 +1,22 @@
 /**
- * Resolving the caller's IP behind Railway's proxy.
+ * Resolving the caller's IP behind a reverse proxy.
  *
- * X-Forwarded-For is a client-writable header: an attacker can prepend any value.
- * The entry appended by the *last* trusted proxy is the only one worth trusting, so
- * the rightmost entry is used, not the leftmost.
+ * X-Forwarded-For is client-writable: an attacker can prepend any value, so the
+ * leftmost entry is never trustworthy. The usual answer is to take the
+ * rightmost entry instead, but on Railway that is the edge's own internal hop,
+ * and it rotates across a pool — measured in production, thirteen requests from
+ * one machine landed on six different rightmost addresses, splitting the
+ * per-IP bucket six ways.
+ *
+ * X-Real-IP is set by the proxy itself and overwrites anything the client sent,
+ * so it is preferred where present. The rightmost XFF entry remains the
+ * fallback for proxies that do not set it. Neither is a hard guarantee, which
+ * is why callers also keep a global bucket that no header can influence.
  */
 export function clientIpFrom(headers: Headers): string {
+  const realIp = headers.get('x-real-ip')?.trim();
+  if (realIp) return realIp;
+
   const forwarded = headers.get('x-forwarded-for');
   if (forwarded) {
     const parts = forwarded
@@ -15,7 +26,7 @@ export function clientIpFrom(headers: Headers): string {
     const rightmost = parts[parts.length - 1];
     if (rightmost) return rightmost;
   }
-  return headers.get('x-real-ip')?.trim() || 'unknown';
+  return 'unknown';
 }
 
 /** Constant-time string comparison for shared secrets. */

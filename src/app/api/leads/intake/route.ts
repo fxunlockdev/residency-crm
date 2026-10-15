@@ -54,12 +54,14 @@ export async function POST(request: NextRequest) {
   // adding a delete to every submission.
   if (Math.random() < 0.02) await pruneRateLimits().catch(() => undefined);
 
-  // X-Forwarded-For is client-writable, so the per-IP bucket alone can be rotated
-  // away. A global bucket keyed on nothing the caller controls is the real ceiling.
+  // No per-caller key is fully reliable behind a proxy pool, so the global
+  // bucket is the real ceiling: it is keyed on nothing the caller can
+  // influence. Thirty a minute is far above anything this practice sees and
+  // still bounds a flood.
   const ip = clientIpFrom(request.headers);
   const [perIp, global] = await Promise.all([
     rateLimitSafe(`lead:ip:${ip}`, 10, 60_000),
-    rateLimitSafe('lead:global', 120, 60_000),
+    rateLimitSafe('lead:global', 30, 60_000),
   ]);
   if (!perIp.allowed || !global.allowed) {
     const retryAfter = Math.max(perIp.retryAfter, global.retryAfter);
