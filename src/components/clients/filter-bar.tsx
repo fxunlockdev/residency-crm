@@ -179,13 +179,12 @@ function Select({
 }) {
   if (options.length === 0) return null;
   return (
-    <label className={inline ? 'inline-flex items-center gap-2 text-sm' : 'sr-only-label'}>
+    <label className={inline ? 'inline-flex items-center gap-2 text-sm' : undefined}>
       <span className={inline ? 'text-ink-mute' : 'sr-only'}>{label}</span>
       <select
         value={value}
         onChange={(event) => onChange(event.target.value)}
         className="field w-auto min-w-[9rem] py-2 text-sm"
-        aria-label={label}
       >
         {allLabel ? <option value="">{allLabel}</option> : null}
         {options.map((option) => (
