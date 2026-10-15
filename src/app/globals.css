@@ -55,8 +55,9 @@
 
   /* Buttons ---------------------------------------------------------- */
   .btn {
-    @apply inline-flex items-center justify-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold
-           transition-all duration-200 ease-out disabled:cursor-not-allowed disabled:opacity-50;
+    @apply inline-flex min-h-[2.5rem] items-center justify-center gap-2 rounded-full border px-4 py-2
+           text-sm font-semibold transition-all duration-200 ease-out
+           disabled:cursor-not-allowed disabled:opacity-50;
   }
 
   .btn-primary {
@@ -74,8 +75,13 @@
   }
 
   .btn-quiet {
-    @apply inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium text-ink-mute
-           transition-colors duration-200 hover:bg-cream-deep hover:text-ink;
+    @apply inline-flex min-h-[2.25rem] items-center gap-1.5 rounded-full px-3 py-2 text-sm font-medium
+           text-ink-mute transition-colors duration-200 hover:bg-cream-deep hover:text-ink;
+  }
+
+  /* Destructive actions must not look identical to "Board view →". */
+  .btn-quiet-danger {
+    @apply btn-quiet text-stage-rose hover:bg-stage-rose/10 hover:text-stage-rose;
   }
 
   .btn-danger {
@@ -87,11 +93,13 @@
     @apply mb-1.5 block text-xs font-semibold uppercase tracking-[0.07em] text-ink-mute;
   }
 
+  /* Keeps the global :focus-visible outline rather than replacing it with a
+     tinted ring: `focus:outline-none` + `ring-pink/30` measured 1.41:1, below
+     the 3:1 WCAG 2.4.11 needs for a focus indicator. */
   .field {
-    @apply w-full rounded-xl border border-line bg-cream-warm px-3.5 py-2.5 text-sm text-ink
-           transition-colors duration-200 placeholder:text-ink-mute/60
-           hover:border-line-strong focus:border-pink-deep focus:outline-none
-           focus:ring-2 focus:ring-pink/30;
+    @apply w-full rounded-xl border border-line-field bg-cream-warm px-3.5 py-2.5 text-sm text-ink
+           transition-colors duration-200 placeholder:text-ink-mute
+           hover:border-ink-soft focus:border-pink-deep;
   }
 
   select.field {

@@ -8,16 +8,22 @@ const config: Config = {
         ink: { DEFAULT: '#0E0D12', soft: '#2A2832', mute: '#6E6A75' },
         cream: { DEFAULT: '#FAF6F1', deep: '#F3EDE5', warm: '#FFFDFA' },
         pink: { DEFAULT: '#F0578C', deep: '#C9366B', soft: '#FF9DBE', wash: '#FDEEF3' },
-        line: { DEFAULT: 'rgba(14,13,18,0.10)', strong: 'rgba(14,13,18,0.18)' },
+        line: {
+          DEFAULT: 'rgba(14,13,18,0.12)',
+          strong: 'rgba(14,13,18,0.20)',
+          // Form controls need a 3:1 boundary (WCAG 1.4.11), which a hairline
+          // divider weight cannot reach on cream.
+          field: 'rgba(14,13,18,0.45)',
+        },
         // Stage colours are used as small chip text, so each one clears
         // WCAG AA (4.5:1) against the cream surfaces.
         stage: {
-          slate: '#6E6A75',
+          slate: '#645F6C',
           sky: '#1F6690',
           amber: '#8A6020',
           violet: '#6B4FB0',
           emerald: '#1F6E4C',
-          rose: '#C9366B',
+          rose: '#BE2F62',
         },
       },
       fontFamily: {
