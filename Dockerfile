@@ -26,6 +26,9 @@ ENV NEXT_TELEMETRY_DISABLED=1
 RUN npx prisma generate && npm run build
 
 FROM base AS runner
+# su-exec lets the entrypoint take ownership of the mounted volume as root and
+# then drop to the app user before exec'ing the server.
+RUN apk add --no-cache su-exec
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV TZ=UTC
@@ -40,7 +43,8 @@ COPY --from=builder --chown=nextjs:nodejs /app/scripts/bootstrap.mjs ./scripts/b
 COPY --from=builder --chown=nextjs:nodejs /app/docker-entrypoint.sh ./docker-entrypoint.sh
 RUN chmod +x ./docker-entrypoint.sh
 
-USER nextjs
+# Stays root only long enough for the entrypoint to chown the volume; the
+# server itself runs as nextjs.
 EXPOSE 3000
 ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
