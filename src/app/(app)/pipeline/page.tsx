@@ -8,9 +8,14 @@ import { PipelineBoard, type BoardCard } from '@/components/pipeline/board';
 export const metadata: Metadata = { title: 'Pipeline board' };
 export const dynamic = 'force-dynamic';
 
+/** The board renders every card at once, so it is capped; the table view is unbounded. */
+const BOARD_LIMIT = 300;
+
 export default async function PipelinePage() {
   const user = await getCurrentUser();
-  const clients = await prisma.client.findMany({
+  const [clients, total] = await Promise.all([
+    prisma.client.findMany({
+    take: BOARD_LIMIT,
     orderBy: [{ followUpDate: { sort: 'asc', nulls: 'last' } }, { fullName: 'asc' }],
     select: {
       id: true,
@@ -23,7 +28,9 @@ export default async function PipelinePage() {
       project: { select: { name: true } },
       commissions: { select: { amountCents: true } },
     },
-  });
+    }),
+    prisma.client.count(),
+  ]);
 
   const cards: BoardCard[] = clients.map((client) => ({
     id: client.id,
@@ -49,6 +56,15 @@ export default async function PipelinePage() {
           </Link>
         }
       />
+      {total > BOARD_LIMIT ? (
+        <p className="mb-4 rounded-xl border border-line bg-cream-deep/50 px-4 py-3 text-sm text-ink-mute">
+          Showing {BOARD_LIMIT} of {total} clients on the board.{' '}
+          <Link href="/clients" className="link">
+            Use the table view
+          </Link>{' '}
+          to see every record.
+        </p>
+      ) : null}
       <PipelineBoard cards={cards} canEdit={!!user && hasRole(user, 'ADVISOR')} />
     </>
   );

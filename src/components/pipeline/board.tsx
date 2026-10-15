@@ -34,6 +34,7 @@ const RAIL_TONE: Record<string, string> = {
 export function PipelineBoard({ cards, canEdit }: { cards: BoardCard[]; canEdit: boolean }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
+  const [movingId, setMovingId] = useState<string | null>(null);
   const [dragging, setDragging] = useState<string | null>(null);
   const [hoverColumn, setHoverColumn] = useState<ClientStatus | null>(null);
   const [optimistic, setOptimistic] = useState<Record<string, ClientStatus>>({});
@@ -43,12 +44,14 @@ export function PipelineBoard({ cards, canEdit }: { cards: BoardCard[]; canEdit:
   const move = (clientId: string, status: ClientStatus) => {
     if (!canEdit) return;
     setOptimistic((current) => ({ ...current, [clientId]: status }));
+    setMovingId(clientId);
     const formData = new FormData();
     formData.set('clientId', clientId);
     formData.set('status', status);
     startTransition(async () => {
       await changeStatusAction(formData);
       router.refresh();
+      setMovingId(null);
     });
   };
 
@@ -57,7 +60,7 @@ export function PipelineBoard({ cards, canEdit }: { cards: BoardCard[]; canEdit:
       // `relative` matters: the sr-only labels on each card are absolutely
       // positioned, and without a containing block here they escape the scroll
       // track and widen the whole page (851px of phantom scroll on mobile).
-      className={clsx('relative max-w-full overflow-x-auto pb-4 transition-opacity', pending && 'opacity-70')}
+      className="relative max-w-full overflow-x-auto pb-4"
       aria-busy={pending}
     >
       <div className="flex min-w-max gap-4">
@@ -123,9 +126,9 @@ export function PipelineBoard({ cards, canEdit }: { cards: BoardCard[]; canEdit:
                           setHoverColumn(null);
                         }}
                         className={clsx(
-                          'rounded-lg border border-line bg-cream-warm p-3 shadow-card transition-all duration-200',
+                          'group rounded-lg border border-line bg-cream-warm p-3 shadow-card transition-all duration-200',
                           canEdit && 'cursor-grab active:cursor-grabbing hover:-translate-y-0.5 hover:shadow-lift',
-                          dragging === card.id && 'opacity-50',
+                          (dragging === card.id || movingId === card.id) && 'opacity-50',
                         )}
                       >
                         <Link href={`/clients/${card.id}`} className="block">
@@ -149,13 +152,16 @@ export function PipelineBoard({ cards, canEdit }: { cards: BoardCard[]; canEdit:
                           ) : null}
                         </div>
 
+                        {/* The stage menu is the keyboard path for drag and drop, so it
+                            stays focusable — it just does not need to shout on every
+                            card at rest. */}
                         {canEdit ? (
-                          <label className="mt-2 block">
+                          <label className="mt-2 block opacity-0 transition-opacity duration-150 focus-within:opacity-100 group-hover:opacity-100">
                             <span className="sr-only">Move {card.fullName} to another stage</span>
                             <select
                               value={statusOf(card)}
                               onChange={(event) => move(card.id, event.target.value as ClientStatus)}
-                              className="w-full rounded-md border border-line bg-cream-deep/60 px-2 py-1 text-xs text-ink-mute transition-colors hover:border-line-strong focus:border-pink-deep focus:outline-none focus:ring-2 focus:ring-pink/30"
+                              className="w-full rounded-md border border-line-strong bg-cream-deep/60 px-2 py-1 text-xs text-ink-soft transition-colors hover:border-ink-soft focus:border-pink-deep"
                             >
                               {STATUS_ORDER.map((option) => (
                                 <option key={option} value={option}>
