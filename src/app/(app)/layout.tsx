@@ -4,6 +4,7 @@ import { logoutAction } from '@/server/auth-actions';
 import { getNavCounts } from '@/lib/queries/counts';
 import { SidebarNav, type NavGroup } from '@/components/shell/nav';
 import { MobileNav } from '@/components/shell/mobile-nav';
+import { GlobalSearch } from '@/components/shell/global-search';
 import { ROLE_LABEL } from '@/lib/labels';
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
@@ -72,6 +73,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           </span>
         </Link>
 
+        <GlobalSearch className="mb-6 px-1" />
+
         <div className="flex-1 overflow-y-auto">
           <SidebarNav groups={groups} />
         </div>
@@ -97,9 +100,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       {/* Content */}
       <div className="flex min-w-0 flex-col">
         <header className="sticky top-0 z-30 flex items-center justify-between gap-3 border-b border-line bg-cream/85 px-4 py-3 backdrop-blur lg:hidden">
-          <Link href="/" className="font-serif text-base tracking-tight">
+          <Link href="/" className="shrink-0 font-serif text-base tracking-tight">
             Residency<span className="text-pink-deep">First</span>
           </Link>
+          <GlobalSearch className="min-w-0 flex-1 max-w-xs" />
           <MobileNav groups={groups} />
         </header>
 
