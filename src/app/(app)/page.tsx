@@ -109,7 +109,8 @@ export default async function DashboardPage() {
         </div>
       </section>
 
-      <div className="mt-10 grid gap-6 lg:grid-cols-[1.15fr_1fr]">
+      {/* items-start: when the follow-up queue is empty, matched heights leave a void. */}
+      <div className="mt-10 grid items-start gap-6 lg:grid-cols-[1.15fr_1fr]">
         {/* Pipeline distribution */}
         <section aria-labelledby="pipeline-heading" className="surface p-6">
           <div className="mb-5 flex items-baseline justify-between">
