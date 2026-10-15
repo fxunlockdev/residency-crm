@@ -63,8 +63,10 @@
     @apply btn border-transparent bg-ink text-cream hover:bg-pink-deep hover:shadow-pink active:translate-y-px;
   }
 
+  /* White on #F0578C is only 3.26:1, so the accent button sits on the deeper
+     rose (4.97:1) and reserves the brighter pink for non-text accents. */
   .btn-accent {
-    @apply btn border-transparent bg-pink text-white hover:bg-pink-deep hover:shadow-pink active:translate-y-px;
+    @apply btn border-transparent bg-pink-deep text-white hover:bg-[#A82B58] hover:shadow-pink active:translate-y-px;
   }
 
   .btn-ghost {
