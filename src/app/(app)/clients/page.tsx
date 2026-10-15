@@ -98,7 +98,7 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
 
                   return (
                     <tr key={client.id}>
-                      <td>
+                      <th scope="row" className="text-left font-normal">
                         <Link href={`/clients/${client.id}`} className="group block">
                           <span className="block font-medium text-ink group-hover:text-pink-deep">
                             {client.fullName}
@@ -108,7 +108,7 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
                             {client.email ? <span className="truncate">{client.email}</span> : null}
                           </span>
                         </Link>
-                      </td>
+                      </th>
                       <td>
                         <StatusChip status={client.status} />
                       </td>

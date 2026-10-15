@@ -75,6 +75,7 @@ export default async function SettingsPage() {
           <div className="surface mb-5 overflow-hidden">
             <div className="overflow-x-auto">
               <table className="data-table">
+                <caption className="sr-only">User accounts and their access level</caption>
                 <thead>
                   <tr>
                     <th scope="col">Name</th>
@@ -87,10 +88,10 @@ export default async function SettingsPage() {
                 <tbody>
                   {users.map((user) => (
                     <tr key={user.id} className={user.isActive ? undefined : 'opacity-55'}>
-                      <td className="font-medium">
+                      <th scope="row" className="text-left font-medium">
                         {user.name}
                         {user.id === actor.id ? <span className="ml-2 text-xs text-ink-mute">(you)</span> : null}
-                      </td>
+                      </th>
                       <td className="text-sm text-ink-soft">{user.email}</td>
                       <td>
                         <span className="chip border-line bg-cream-deep text-ink-soft">{ROLE_LABEL[user.role]}</span>

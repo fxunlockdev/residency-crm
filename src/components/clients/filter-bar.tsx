@@ -2,6 +2,7 @@
 
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import clsx from 'clsx';
 import { STATUS_LABEL, STATUS_ORDER } from '@/lib/pipeline';
 import { SOURCE_LABEL } from '@/lib/labels';
 import type { LeadSource } from '@prisma/client';
@@ -23,6 +24,7 @@ export function ClientFilterBar({
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [query, setQuery] = useState(searchParams.get('q') ?? '');
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const firstRender = useRef(true);
 
   const push = useCallback(
@@ -54,6 +56,29 @@ export function ClientFilterBar({
 
   return (
     <div className="mb-6 space-y-3">
+      {/* On a phone the filter stack filled the whole first screen before any
+          data, so it collapses behind a toggle and stays open from sm upwards. */}
+      <button
+        type="button"
+        onClick={() => setFiltersOpen((open) => !open)}
+        aria-expanded={filtersOpen}
+        aria-controls="client-filters"
+        className="btn-ghost w-full justify-between sm:hidden"
+      >
+        <span className="flex items-center gap-2">
+          Search and filters
+          {activeCount > 0 ? (
+            <span className="rounded-full bg-pink-deep px-1.5 py-0.5 text-micro font-semibold text-white">
+              {activeCount}
+            </span>
+          ) : null}
+        </span>
+        <span aria-hidden className={clsx('transition-transform duration-200', filtersOpen && 'rotate-180')}>
+          ⌄
+        </span>
+      </button>
+
+      <div id="client-filters" className={clsx('space-y-3', filtersOpen ? 'block' : 'hidden', 'sm:block')}>
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative min-w-[18rem] flex-[2]">
           <label htmlFor="client-search" className="sr-only">
@@ -157,6 +182,7 @@ export function ClientFilterBar({
             { value: 'reference', label: 'Reference' },
           ]}
         />
+      </div>
       </div>
     </div>
   );

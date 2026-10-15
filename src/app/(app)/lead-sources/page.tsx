@@ -79,6 +79,7 @@ function SourceTable({
     <div className="surface overflow-hidden">
       <div className="overflow-x-auto">
         <table className="data-table">
+          <caption className="sr-only">Lead volume and funded rate by source</caption>
           <thead>
             <tr>
               <th scope="col">Source</th>

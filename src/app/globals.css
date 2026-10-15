@@ -139,8 +139,14 @@
            text-left text-micro font-semibold uppercase tracking-[0.09em] text-ink-mute backdrop-blur;
   }
 
-  .data-table tbody td {
+  .data-table tbody td,
+  .data-table tbody th {
     @apply border-b border-line/70 px-4 py-3 align-middle;
+  }
+
+  /* Row headers are cells, not column headings — drop the sticky header look. */
+  .data-table tbody th {
+    @apply static z-auto bg-transparent text-sm normal-case tracking-normal text-ink backdrop-blur-none;
   }
 
   .data-table tbody tr {

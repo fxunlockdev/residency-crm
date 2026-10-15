@@ -59,6 +59,7 @@ export default async function ActivityPage({
         <div className="surface overflow-hidden">
           <div className="overflow-x-auto">
             <table className="data-table">
+              <caption className="sr-only">Audit log entries, newest first</caption>
               <thead>
                 <tr>
                   <th scope="col">When</th>

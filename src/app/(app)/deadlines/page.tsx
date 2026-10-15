@@ -84,12 +84,12 @@ export default async function DeadlinesPage() {
               <tbody>
                 {clients.map((client) => (
                   <tr key={client.id}>
-                    <td>
+                    <th scope="row" className="text-left font-normal">
                       <Link href={`/clients/${client.id}`} className="font-medium text-ink hover:text-pink-deep">
                         {client.fullName}
                       </Link>
                       <span className="block text-xs text-ink-mute tabular">{client.reference}</span>
-                    </td>
+                    </th>
                     <td>
                       <StatusChip status={client.status} />
                     </td>
