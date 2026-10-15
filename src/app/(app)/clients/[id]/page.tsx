@@ -13,6 +13,7 @@ import { MeetingComposer } from '@/components/clients/meeting-composer';
 import { CommissionPanel } from '@/components/clients/commission-editor';
 import { DocumentUploader } from '@/components/clients/document-uploader';
 import { EmptyState } from '@/components/ui/empty-state';
+import { SubmitButton } from '@/components/ui/submit-button';
 import { formatCents } from '@/lib/money';
 import { daysUntil, formatDate, formatDateTime, relativeDays, todayUtc } from '@/lib/dates';
 import { COMMISSION_TRIGGER_LABEL, DOCUMENT_KIND_LABEL, isRetrogressionCountry, MEETING_TYPE_LABEL } from '@/lib/labels';
@@ -307,9 +308,13 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
                       {canEdit ? (
                         <form action={deleteMeetingAction}>
                           <input type="hidden" name="meetingId" value={meeting.id} />
-                          <button type="submit" className="btn-quiet">
+                          <SubmitButton
+                            className="btn-quiet-danger"
+                            pendingLabel="Removing…"
+                            confirm={`Remove this meeting from ${client.fullName}? This cannot be undone.`}
+                          >
                             Remove
-                          </button>
+                          </SubmitButton>
                         </form>
                       ) : null}
                     </div>
@@ -351,11 +356,15 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
                       </span>
                     </span>
                     {canEdit ? (
-                      <form action={deleteDocumentAction}>
+                      <form action={deleteDocumentAction} className="shrink-0">
                         <input type="hidden" name="documentId" value={document.id} />
-                        <button type="submit" className="btn-quiet shrink-0">
+                        <SubmitButton
+                          className="btn-quiet-danger"
+                          pendingLabel="Deleting…"
+                          confirm={`Delete ${document.filename}? This cannot be undone.`}
+                        >
                           Delete
-                        </button>
+                        </SubmitButton>
                       </form>
                     ) : null}
                   </li>
@@ -394,9 +403,13 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
               </p>
               <form action={deleteClientAction} className="mt-4">
                 <input type="hidden" name="clientId" value={client.id} />
-                <button type="submit" className="btn-danger">
+                <SubmitButton
+                  className="btn-danger"
+                  pendingLabel="Deleting…"
+                  confirm={`Permanently delete ${client.fullName} (${client.reference}), along with every meeting, commission and document attached? This cannot be undone.`}
+                >
                   Delete permanently
-                </button>
+                </SubmitButton>
               </form>
             </section>
           ) : null}

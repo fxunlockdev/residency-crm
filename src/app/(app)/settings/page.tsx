@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { requireRole } from '@/lib/auth';
 import { PageHeader } from '@/components/ui/page-header';
 import { UserForm } from '@/components/settings/user-form';
+import { SubmitButton } from '@/components/ui/submit-button';
 import { CodeBlock } from '@/components/settings/snippet';
 import { Alert } from '@/components/ui/alert';
 import { getDataQuality } from '@/lib/queries/data-quality';
@@ -106,9 +107,17 @@ export default async function SettingsPage() {
                           {user.id !== actor.id ? (
                             <form action={toggleUserAction}>
                               <input type="hidden" name="userId" value={user.id} />
-                              <button type="submit" className="btn-quiet">
+                              <SubmitButton
+                                className={user.isActive ? 'btn-quiet-danger' : 'btn-quiet'}
+                                pendingLabel="Saving…"
+                                confirm={
+                                  user.isActive
+                                    ? `Deactivate ${user.name}? They will be signed out and cannot sign back in.`
+                                    : undefined
+                                }
+                              >
                                 {user.isActive ? 'Deactivate' : 'Reactivate'}
-                              </button>
+                              </SubmitButton>
                             </form>
                           ) : null}
                         </div>
