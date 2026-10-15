@@ -30,11 +30,17 @@ async function main() {
   if (password.length < 12) throw new Error('Password must be at least 12 characters.');
   const passwordHash = await bcrypt.hash(password, 12);
 
-  const user = await prisma.user.upsert({
-    where: { email },
-    update: { name, role, passwordHash, isActive: true },
-    create: { email, name, role, passwordHash },
-  });
+  const existing = await prisma.user.findUnique({ where: { email } });
+  if (existing && !process.argv.includes('--force')) {
+    throw new Error(
+      `${email} already has an account (${existing.role}). ` +
+        'Re-run with --force to reset their password and role, or manage them in Settings.',
+    );
+  }
+
+  const user = existing
+    ? await prisma.user.update({ where: { email }, data: { name, role, passwordHash, isActive: true } })
+    : await prisma.user.create({ data: { email, name, role, passwordHash } });
 
   console.log(`\n${user.email} is ready as ${user.role}.`);
   if (!arg('--password') && !process.env.ADMIN_PASSWORD) {

@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { prisma } from '@/lib/prisma';
-import { AuthError, requireRoleOrThrow } from '@/lib/auth';
+import { AuthError, requireRoleOrThrow, requireRoleOrRedirect } from '@/lib/auth';
 import { recordAudit } from '@/lib/audit';
 import { fieldErrors, meetingSchema } from '@/lib/validation';
 import { MEETING_TYPE_LABEL } from '@/lib/labels';
@@ -50,7 +50,7 @@ export async function createMeetingAction(_previous: FormState, formData: FormDa
 }
 
 export async function deleteMeetingAction(formData: FormData): Promise<void> {
-  const user = await requireRoleOrThrow('ADVISOR');
+  const user = await requireRoleOrRedirect('ADVISOR');
   const id = String(formData.get('meetingId') ?? '');
   const meeting = await prisma.meeting.findUnique({
     where: { id },

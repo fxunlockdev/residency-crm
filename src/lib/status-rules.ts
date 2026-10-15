@@ -1,5 +1,5 @@
 import type { ClientStatus, CommissionTrigger } from '@prisma/client';
-import { STATUS_COMMISSION_TRIGGER, STATUS_DATE_FIELD, type StatusDateField } from './pipeline';
+import { STATUS_COMMISSION_TRIGGER, STATUS_DATE_FIELD, STATUS_ORDER, statusIndex, type StatusDateField } from './pipeline';
 
 export type StatusDates = Partial<Record<StatusDateField, Date | null>>;
 
@@ -31,4 +31,20 @@ export function conversionTypeFor(status: ClientStatus): 'ENGAGED' | 'FUNDED' | 
   if (status === 'ENGAGED') return 'ENGAGED';
   if (status === 'FUNDED') return 'FUNDED';
   return null;
+}
+
+/**
+ * Every stage from just after `from` up to and including `to`, in pipeline order.
+ *
+ * Stages can be skipped — the board lets a card be dragged anywhere — so the
+ * side effects of each stage crossed must be applied, not only the
+ * destination's. Otherwise Prospect straight to "I-526E filed" would leave the
+ * on-funding commission at Not due and never record the Funded conversion.
+ */
+export function stagesCrossed(from: ClientStatus | undefined, to: ClientStatus): ClientStatus[] {
+  if (to === 'LOST') return [];
+  const target = statusIndex(to);
+  const start = from === undefined || from === 'LOST' ? target : statusIndex(from) + 1;
+  if (start > target) return [to];
+  return STATUS_ORDER.slice(start, target + 1).filter((stage) => stage !== 'LOST');
 }

@@ -1,12 +1,14 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import type { CommissionStatus } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
-import { AuthError, requireRoleOrThrow } from '@/lib/auth';
-import { recordAudit } from '@/lib/audit';
+import { AuthError, requireRoleOrThrow, requireRoleOrRedirect } from '@/lib/auth';
+import { diffFields, recordAudit } from '@/lib/audit';
 import { commissionSchema, fieldErrors } from '@/lib/validation';
 import { COMMISSION_STATUS_LABEL, COMMISSION_TRIGGER_LABEL } from '@/lib/labels';
 import { formatCents } from '@/lib/money';
+import { todayUtc } from '@/lib/dates';
 import type { FormState } from './client-actions';
 
 export async function createCommissionAction(_previous: FormState, formData: FormData): Promise<FormState> {
@@ -98,16 +100,34 @@ export async function updateCommissionAction(
     },
   });
 
-  if (existing.status !== input.status) {
+  // Every changed field is recorded, not just the status: an amount edit is
+  // the one most worth being able to trace.
+  const changes = diffFields(
+    existing as unknown as Record<string, unknown>,
+    {
+      amountCents: input.amount ?? 0,
+      status: input.status,
+      trigger: input.trigger,
+      invoiceNumber: input.invoiceNumber,
+      invoiceSentDate: input.invoiceSentDate,
+      paymentDueDate: input.paymentDueDate,
+      paymentReceivedDate: input.paymentReceivedDate,
+      amountReceivedCents: input.amountReceived,
+    } as Record<string, unknown>,
+  );
+  for (const change of changes) {
     await recordAudit({
       entity: 'Commission',
       entityId: commissionId,
       action: 'updated',
-      field: 'status',
-      oldValue: existing.status,
-      newValue: input.status,
+      field: change.field,
+      oldValue: change.oldValue,
+      newValue: change.newValue,
       actor: user,
-      summary: `${user.name} marked ${existing.client.fullName}'s commission ${COMMISSION_STATUS_LABEL[input.status]}`,
+      summary:
+        change.field === 'status'
+          ? `${user.name} marked ${existing.client.fullName}'s commission ${COMMISSION_STATUS_LABEL[input.status]}`
+          : `${user.name} changed ${change.field} on ${existing.client.fullName}'s commission`,
     });
   }
 
@@ -119,10 +139,10 @@ export async function updateCommissionAction(
 
 /** One-click transitions from the commissions queue. */
 export async function advanceCommissionAction(formData: FormData): Promise<void> {
-  const user = await requireRoleOrThrow('ADVISOR');
+  const user = await requireRoleOrRedirect('ADVISOR');
   const id = String(formData.get('commissionId') ?? '');
   const next = String(formData.get('status') ?? '');
-  if (!id || !next) return;
+  if (!id || !(next in COMMISSION_STATUS_LABEL)) return;
 
   const existing = await prisma.commission.findUnique({
     where: { id },
@@ -130,10 +150,13 @@ export async function advanceCommissionAction(formData: FormData): Promise<void>
   });
   if (!existing) return;
 
-  const data: Record<string, unknown> = { status: next };
-  if (next === 'INVOICED' && !existing.invoiceSentDate) data.invoiceSentDate = new Date();
+  const status = next as CommissionStatus;
+  const data: Record<string, unknown> = { status };
+  // These columns hold UTC-midnight calendar days everywhere else; a wall-clock
+  // timestamp here would record tomorrow's date for anyone west of UTC.
+  if (next === 'INVOICED' && !existing.invoiceSentDate) data.invoiceSentDate = todayUtc();
   if (next === 'PAID') {
-    if (!existing.paymentReceivedDate) data.paymentReceivedDate = new Date();
+    if (!existing.paymentReceivedDate) data.paymentReceivedDate = todayUtc();
     if (existing.amountReceivedCents === null) data.amountReceivedCents = existing.amountCents;
     data.paidDateUnknown = false;
   }
@@ -145,9 +168,9 @@ export async function advanceCommissionAction(formData: FormData): Promise<void>
     action: 'updated',
     field: 'status',
     oldValue: existing.status,
-    newValue: next,
+    newValue: status,
     actor: user,
-    summary: `${user.name} marked ${existing.client.fullName}'s commission ${COMMISSION_STATUS_LABEL[next as keyof typeof COMMISSION_STATUS_LABEL]}`,
+    summary: `${user.name} marked ${existing.client.fullName}'s commission ${COMMISSION_STATUS_LABEL[status]}`,
   });
 
   revalidatePath('/commissions');
@@ -156,7 +179,7 @@ export async function advanceCommissionAction(formData: FormData): Promise<void>
 }
 
 export async function deleteCommissionAction(formData: FormData): Promise<void> {
-  const user = await requireRoleOrThrow('ADMIN');
+  const user = await requireRoleOrRedirect('ADMIN');
   const id = String(formData.get('commissionId') ?? '');
   const existing = await prisma.commission.findUnique({
     where: { id },

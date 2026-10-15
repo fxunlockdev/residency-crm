@@ -53,7 +53,7 @@ export async function removeUpload(storageKey: string): Promise<void> {
 }
 
 /** Guards against a storage key that tries to escape the upload directory. */
-function resolveKey(storageKey: string): string {
+export function resolveKey(storageKey: string): string {
   const root = path.resolve(uploadRoot());
   const resolved = path.resolve(root, storageKey);
   if (resolved !== root && !resolved.startsWith(root + path.sep)) {

@@ -13,6 +13,7 @@ import { MeetingComposer } from '@/components/clients/meeting-composer';
 import { CommissionPanel } from '@/components/clients/commission-editor';
 import { DocumentUploader } from '@/components/clients/document-uploader';
 import { EmptyState } from '@/components/ui/empty-state';
+import { Alert } from '@/components/ui/alert';
 import { SubmitButton } from '@/components/ui/submit-button';
 import { formatCents } from '@/lib/money';
 import { daysUntil, formatDate, formatDateTime, relativeDays, todayUtc } from '@/lib/dates';
@@ -30,8 +31,15 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   return { title: client?.fullName ?? 'Client' };
 }
 
-export default async function ClientDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function ClientDetailPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const { id } = await params;
+  const query = await searchParams;
   const [client, user] = await Promise.all([getClientDetail(id), getCurrentUser()]);
   if (!client) notFound();
 
@@ -97,6 +105,15 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
           ) : null
         }
       />
+
+      {query.error === 'has-financials' ? (
+        <div className="mb-8">
+          <Alert tone="error" title="This client cannot be deleted">
+            There are invoiced or paid commissions attached, and deleting the record would take that revenue history
+            with it. Move the client to “Lost / Not proceeding” instead.
+          </Alert>
+        </div>
+      ) : null}
 
       {canEdit ? (
         <div className="mb-8 rounded-xl2 border border-line bg-cream-deep/40 px-5 py-4">

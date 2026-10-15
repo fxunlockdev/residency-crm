@@ -9,10 +9,10 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      '@': path.resolve(__dirname, 'src'),
+      '@': path.resolve(import.meta.dirname, 'src'),
       // `server-only` throws outside a React Server Component; stub it so the
       // server-side modules it guards can still be unit tested.
-      'server-only': path.resolve(__dirname, 'tests/stubs/server-only.ts'),
+      'server-only': path.resolve(import.meta.dirname, 'tests/stubs/server-only.ts'),
     },
   },
 });

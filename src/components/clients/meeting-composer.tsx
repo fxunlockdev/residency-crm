@@ -9,6 +9,12 @@ import { MEETING_TYPE_LABEL } from '@/lib/labels';
 import type { FormState } from '@/server/client-actions';
 import type { MeetingType } from '@prisma/client';
 
+/** "yyyy-mm-ddThh:mm" in the viewer's own clock, which is what the input expects. */
+function localDateTimeValue(now: Date = new Date()): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
+}
+
 export function MeetingComposer({ clientId }: { clientId: string }) {
   const [state, formAction] = useActionState<FormState, FormData>(createMeetingAction, {});
   const [open, setOpen] = useState(false);
@@ -53,7 +59,7 @@ export function MeetingComposer({ clientId }: { clientId: string }) {
             type="datetime-local"
             className="field"
             required
-            defaultValue={new Date().toISOString().slice(0, 16)}
+            defaultValue={localDateTimeValue()}
           />
         </Field>
 

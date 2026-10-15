@@ -26,7 +26,9 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
     headers: {
       'Content-Type': document.mimeType,
       'Content-Length': String(body.byteLength),
-      'Content-Disposition': `inline; filename="${encodeURIComponent(document.filename)}"`,
+      // attachment, not inline: the stored bytes are only validated by their
+      // declared type, so they must never render on the CRM's own origin.
+      'Content-Disposition': `attachment; filename="${encodeURIComponent(document.filename)}"`,
       'Cache-Control': 'private, no-store',
       'X-Content-Type-Options': 'nosniff',
     },

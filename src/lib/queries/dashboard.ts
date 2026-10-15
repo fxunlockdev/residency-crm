@@ -21,9 +21,14 @@ export async function getDashboard() {
     prisma.client.groupBy({ by: ['status'], _count: { _all: true } }),
     prisma.client.count({ where: { status: { in: ACTIVE_STATUSES } } }),
     prisma.client.count({ where: { status: { in: WON_STATUSES } } }),
-    prisma.commission.groupBy({ by: ['status'], _count: { _all: true }, _sum: { amountCents: true } }),
+    prisma.commission.groupBy({
+      by: ['status'],
+      where: { client: { status: { not: 'LOST' } } },
+      _count: { _all: true },
+      _sum: { amountCents: true },
+    }),
     prisma.commission.findMany({
-      where: { status: 'INVOICED', paymentDueDate: { lt: today } },
+      where: { status: 'INVOICED', paymentDueDate: { lt: today }, client: { status: { not: 'LOST' } } },
       select: { id: true, amountCents: true },
     }),
     prisma.client.findMany({
@@ -72,8 +77,11 @@ export async function getDashboard() {
     },
     followUps,
     deadlines: {
-      feeIncrease: { date: FEE_INCREASE_DATE, atRisk: preFiling.length },
-      investmentIncrease: { date: INVESTMENT_INCREASE_DATE, atRisk: preFiling.length },
+      // One honest number: the clients that have not filed an I-526E. Reporting
+      // it twice under two different dates implied two different cohorts.
+      notFiled: preFiling.length,
+      feeIncrease: { date: FEE_INCREASE_DATE },
+      investmentIncrease: { date: INVESTMENT_INCREASE_DATE },
       clients: preFiling.slice(0, 6),
     },
     recentActivity,

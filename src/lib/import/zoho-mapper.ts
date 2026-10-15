@@ -268,9 +268,16 @@ function mapCommissions(row: ZohoRow, options: Required<MapOptions>, warnings: s
   }
 
   const instalments: Array<{ trigger: CommissionTrigger; paid: boolean; date: Date | null; unknownDate: boolean }> = [];
-  if (fundingPaid || filingPaid) {
-    instalments.push({ trigger: 'ON_FUNDING', paid: fundingPaid, date: fundingDate, unknownDate: fundingPaidUnknownDate });
-    instalments.push({ trigger: 'ON_I526E_FILING', paid: filingPaid, date: filingDate, unknownDate: filingPaidUnknownDate });
+  if (fundingPaid && filingPaid) {
+    // Both tranches were settled, so the fee really was staged.
+    instalments.push({ trigger: 'ON_FUNDING', paid: true, date: fundingDate, unknownDate: fundingPaidUnknownDate });
+    instalments.push({ trigger: 'ON_I526E_FILING', paid: true, date: filingDate, unknownDate: filingPaidUnknownDate });
+  } else if (fundingPaid) {
+    // Only the funding tranche is recorded: the whole fee sits on it rather
+    // than inventing a second, unpaid instalment for the other half.
+    instalments.push({ trigger: 'ON_FUNDING', paid: true, date: fundingDate, unknownDate: fundingPaidUnknownDate });
+  } else if (filingPaid) {
+    instalments.push({ trigger: 'ON_I526E_FILING', paid: true, date: filingDate, unknownDate: filingPaidUnknownDate });
   } else {
     // Fee agreed but nothing paid yet.
     instalments.push({ trigger: 'ON_FUNDING', paid: false, date: null, unknownDate: false });

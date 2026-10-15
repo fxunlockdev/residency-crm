@@ -24,11 +24,11 @@ export async function buildDigest(): Promise<Digest> {
       select: { fullName: true, nextAction: true, followUpDate: true },
     }),
     prisma.commission.findMany({
-      where: { status: 'DUE' },
+      where: { status: 'DUE', client: { status: { not: 'LOST' } } },
       include: { client: { select: { fullName: true } }, regionalCentre: { select: { name: true } } },
     }),
     prisma.commission.findMany({
-      where: { status: 'INVOICED', paymentDueDate: { lt: today } },
+      where: { status: 'INVOICED', paymentDueDate: { lt: today }, client: { status: { not: 'LOST' } } },
       include: { client: { select: { fullName: true } } },
       orderBy: { paymentDueDate: 'asc' },
     }),
@@ -88,6 +88,15 @@ export function renderDigestText(digest: Digest): string {
 }
 
 export async function sendDigestEmail(digest: Digest): Promise<{ sent: boolean; reason?: string }> {
+  try {
+    return await deliver(digest);
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : 'Unknown error sending the digest.';
+    return { sent: false, reason };
+  }
+}
+
+async function deliver(digest: Digest): Promise<{ sent: boolean; reason?: string }> {
   const apiKey = process.env.RESEND_API_KEY;
   const to = process.env.ALERT_EMAIL_TO;
   const from = process.env.ALERT_EMAIL_FROM ?? 'crm@residencyfirst.com';
@@ -96,6 +105,8 @@ export async function sendDigestEmail(digest: Digest): Promise<{ sent: boolean; 
 
   const response = await fetch('https://api.resend.com/emails', {
     method: 'POST',
+    // Node has no default timeout: a hung provider would hold the request open.
+    signal: AbortSignal.timeout(10_000),
     headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
       from,

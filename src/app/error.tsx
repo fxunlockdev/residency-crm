@@ -4,8 +4,13 @@ import { useEffect } from 'react';
 
 export default function GlobalError({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
   useEffect(() => {
-    // Surfaced in the Railway logs; the digest is the only safe identifier to show a user.
-    console.error('Unhandled application error', error);
+    // Name, message and digest only: the error object can carry query metadata,
+    // and these logs are retained by the host.
+    console.error('Unhandled application error', {
+      name: error.name,
+      message: error.message,
+      digest: error.digest,
+    });
   }, [error]);
 
   return (

@@ -4,12 +4,13 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { Prisma, type ClientStatus } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
-import { AuthError, requireRoleOrThrow } from '@/lib/auth';
+import { AuthError, requireRoleOrThrow, requireRoleOrRedirect } from '@/lib/auth';
 import { diffFields, recordAudit } from '@/lib/audit';
 import { clientSchema, fieldErrors } from '@/lib/validation';
-import { backfillStatusDate, commissionTriggerFor, conversionTypeFor } from '@/lib/status-rules';
-import { STATUS_LABEL } from '@/lib/pipeline';
+import { backfillStatusDate, commissionTriggerFor, conversionTypeFor, stagesCrossed } from '@/lib/status-rules';
+import { STATUS_LABEL, STATUS_ORDER } from '@/lib/pipeline';
 import { todayUtc } from '@/lib/dates';
+import { removeUpload } from '@/lib/storage';
 import { nextReference } from './reference';
 
 export type FormState = { errors?: Record<string, string>; message?: string; ok?: boolean };
@@ -79,7 +80,7 @@ export async function createClientAction(_previous: FormState, formData: FormDat
         actor: user,
         summary: `${user.name} added ${created.fullName} (${created.reference})`,
       });
-      await applyStatusSideEffects(created.id, input.status, user, input.investmentAmount);
+      await applyStatusSideEffects(created.id, input.status, user);
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') continue;
       throw error;
@@ -168,7 +169,7 @@ export async function updateClientAction(
   }
 
   if (statusChanged) {
-    await applyStatusSideEffects(clientId, input.status, user, input.investmentAmount);
+    await applyStatusSideEffects(clientId, input.status, user, existing.status);
   }
 
   revalidatePath('/clients');
@@ -179,16 +180,28 @@ export async function updateClientAction(
 
 /** Used by the pipeline board and the quick actions on the client record. */
 export async function changeStatusAction(formData: FormData): Promise<void> {
-  const user = await requireRoleOrThrow('ADVISOR');
+  const user = await requireRoleOrRedirect('ADVISOR');
   const clientId = String(formData.get('clientId') ?? '');
-  const status = String(formData.get('status') ?? '') as ClientStatus;
-  if (!clientId || !status) return;
+  const raw = String(formData.get('status') ?? '');
+  if (!clientId || !(STATUS_ORDER as string[]).includes(raw)) return;
+  const status = raw as ClientStatus;
 
   const existing = await prisma.client.findUnique({ where: { id: clientId } });
   if (!existing || existing.status === status) return;
 
   const backfill = backfillStatusDate(status, existing, todayUtc());
-  await prisma.client.update({ where: { id: clientId }, data: { status, ...backfill } });
+
+  // Conditional on the status we read, so two advisors moving the same card at
+  // once cannot both run their side effects against a stale starting stage.
+  const moved = await prisma.client.updateMany({
+    where: { id: clientId, status: existing.status },
+    data: { status, ...backfill },
+  });
+  if (moved.count === 0) {
+    revalidatePath(`/clients/${clientId}`);
+    revalidatePath('/pipeline');
+    return;
+  }
 
   await recordAudit({
     entity: 'Client',
@@ -201,7 +214,7 @@ export async function changeStatusAction(formData: FormData): Promise<void> {
     summary: `${user.name} moved ${existing.fullName} to ${STATUS_LABEL[status]}`,
   });
 
-  await applyStatusSideEffects(clientId, status, user, existing.investmentAmountCents);
+  await applyStatusSideEffects(clientId, status, user, existing.status);
 
   revalidatePath('/pipeline');
   revalidatePath('/clients');
@@ -210,17 +223,47 @@ export async function changeStatusAction(formData: FormData): Promise<void> {
 }
 
 export async function deleteClientAction(formData: FormData): Promise<void> {
-  const user = await requireRoleOrThrow('ADMIN');
+  const user = await requireRoleOrRedirect('ADMIN');
   const clientId = String(formData.get('clientId') ?? '');
-  const client = await prisma.client.findUnique({ where: { id: clientId }, select: { fullName: true, reference: true } });
+  const client = await prisma.client.findUnique({
+    where: { id: clientId },
+    select: {
+      fullName: true,
+      reference: true,
+      commissions: { select: { amountCents: true, status: true, invoiceNumber: true, trigger: true } },
+      documents: { select: { storageKey: true } },
+      _count: { select: { meetings: true } },
+    },
+  });
   if (!client) return;
 
+  // Everything cascades, so a client with settled money would take the revenue
+  // record with it. Those are kept; "Lost / Not proceeding" is the way out.
+  const settled = client.commissions.filter((c) => c.status === 'PAID' || c.status === 'INVOICED');
+  if (settled.length > 0) {
+    redirect(`/clients/${clientId}?error=has-financials`);
+  }
+
+  // Serialise what is about to disappear so the audit log is not left with a
+  // name and nothing else.
+  const snapshot = JSON.stringify({
+    commissions: client.commissions,
+    meetings: client._count.meetings,
+    documents: client.documents.length,
+  });
+
   await prisma.client.delete({ where: { id: clientId } });
+  // The rows cascade, the bytes do not.
+  for (const document of client.documents) {
+    await removeUpload(document.storageKey);
+  }
+
   await recordAudit({
     entity: 'Client',
     entityId: clientId,
     action: 'deleted',
     actor: user,
+    oldValue: snapshot,
     summary: `${user.name} deleted ${client.fullName} (${client.reference})`,
   });
 
@@ -230,17 +273,24 @@ export async function deleteClientAction(formData: FormData): Promise<void> {
 }
 
 /**
- * Moves matching commissions from Not due to Due and queues the Google Ads conversion.
- * Both are spec requirements of a status change.
+ * Applies the side effects of landing on `status`, having come from `from`.
+ *
+ * Stages can be skipped (the board lets a card be dragged anywhere), so every
+ * stage crossed is applied, not just the destination. Otherwise moving
+ * Prospect straight to I-526E filed would leave the on-funding commission stuck
+ * at Not due forever and never record the Funded conversion.
  */
 async function applyStatusSideEffects(
   clientId: string,
   status: ClientStatus,
   user: { id: string; name: string },
-  investmentCents: number | null,
+  from?: ClientStatus,
 ): Promise<void> {
-  const trigger = commissionTriggerFor(status);
-  if (trigger) {
+  const crossed = stagesCrossed(from, status);
+
+  for (const stage of crossed) {
+    const trigger = commissionTriggerFor(stage);
+    if (!trigger) continue;
     const due = await prisma.commission.updateMany({
       where: { clientId, trigger, status: 'NOT_DUE' },
       data: { status: 'DUE' },
@@ -251,32 +301,44 @@ async function applyStatusSideEffects(
         entityId: clientId,
         action: 'updated',
         actor: user,
-        summary: `${due.count} commission${due.count === 1 ? '' : 's'} became due on reaching ${STATUS_LABEL[status]}`,
+        summary: `${due.count} commission${due.count === 1 ? '' : 's'} became due on reaching ${STATUS_LABEL[stage]}`,
       });
     }
   }
 
-  const conversionType = conversionTypeFor(status);
-  if (!conversionType) return;
-
   const client = await prisma.client.findUnique({ where: { id: clientId }, select: { gclid: true } });
-  // Events are always recorded; the uploader skips them when Google Ads is not configured.
-  await prisma.conversionEvent.upsert({
-    where: { clientId_type: { clientId, type: conversionType } },
-    update: {},
-    create: {
-      clientId,
-      type: conversionType,
-      gclid: client?.gclid ?? null,
-      valueCents: conversionType === 'FUNDED' ? await expectedCommissionCents(clientId, investmentCents) : null,
-      status: client?.gclid ? 'PENDING' : 'SKIPPED',
-    },
-  });
+
+  for (const stage of crossed) {
+    const conversionType = conversionTypeFor(stage);
+    if (!conversionType) continue;
+
+    const valueCents = conversionType === 'FUNDED' ? await expectedCommissionCents(clientId) : null;
+    const queueState = client?.gclid ? 'PENDING' : 'SKIPPED';
+
+    // Refresh the queued event rather than freezing whatever was true the first
+    // time: a GCLID or a commission recorded later must still reach Google Ads.
+    await prisma.conversionEvent.upsert({
+      where: { clientId_type: { clientId, type: conversionType } },
+      update: {
+        gclid: client?.gclid ?? null,
+        ...(valueCents === null ? {} : { valueCents }),
+        status: { set: queueState },
+      },
+      create: {
+        clientId,
+        type: conversionType,
+        gclid: client?.gclid ?? null,
+        valueCents,
+        status: queueState,
+      },
+    });
+  }
 }
 
-async function expectedCommissionCents(clientId: string, fallback: number | null): Promise<number | null> {
+
+async function expectedCommissionCents(clientId: string): Promise<number | null> {
   const total = await prisma.commission.aggregate({ where: { clientId }, _sum: { amountCents: true } });
-  return total._sum.amountCents || fallback;
+  return total._sum.amountCents ?? null;
 }
 
 const FIELD_LABELS: Record<string, string> = {

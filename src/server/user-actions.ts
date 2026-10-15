@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
-import { AuthError, hashPassword, requireRoleOrThrow } from '@/lib/auth';
+import { AuthError, hashPassword, requireRoleOrThrow, requireRoleOrRedirect } from '@/lib/auth';
 import { recordAudit } from '@/lib/audit';
 import { fieldErrors, userSchema } from '@/lib/validation';
 import { ROLE_LABEL } from '@/lib/labels';
@@ -98,7 +98,7 @@ export async function updateUserAction(userId: string, _previous: FormState, for
 }
 
 export async function toggleUserAction(formData: FormData): Promise<void> {
-  const actor = await requireRoleOrThrow('ADMIN');
+  const actor = await requireRoleOrRedirect('ADMIN');
   const userId = String(formData.get('userId') ?? '');
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user) return;
@@ -125,7 +125,7 @@ export async function toggleUserAction(formData: FormData): Promise<void> {
 }
 
 export async function createReferenceAction(formData: FormData): Promise<void> {
-  const actor = await requireRoleOrThrow('ADMIN');
+  const actor = await requireRoleOrRedirect('ADMIN');
   const kind = String(formData.get('kind') ?? '');
   const name = String(formData.get('name') ?? '').trim();
   if (!name) return;

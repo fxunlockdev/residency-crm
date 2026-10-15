@@ -14,6 +14,8 @@ export async function getNavCounts() {
     }),
     prisma.commission.count({
       where: {
+        // A client who is not proceeding is not money to chase.
+        client: { status: { not: 'LOST' } },
         OR: [{ status: 'DUE' }, { status: 'INVOICED', paymentDueDate: { lt: today } }],
       },
     }),

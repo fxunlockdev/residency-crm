@@ -48,8 +48,12 @@ async function main(): Promise<void> {
 
   const mapped = rows.map((row, index) => ({ index, ...mapZohoRow(row, { splitStagedFee: args.splitStagedFee }) }));
 
+  // Names are only printed with --verbose; otherwise the log stays free of PII.
+  const verbose = process.argv.includes('--verbose');
   const warnings = mapped.flatMap((m) =>
-    m.warnings.map((w) => `  row ${m.index + 2} (${m.client.fullName || 'unnamed'}): ${w}`),
+    m.warnings.map((w) =>
+      verbose ? `  row ${m.index + 2} (${m.client.fullName || 'unnamed'}): ${w}` : `  row ${m.index + 2}: ${w}`,
+    ),
   );
 
   if (args.dryRun) {
@@ -58,6 +62,24 @@ async function main(): Promise<void> {
   }
 
   if (args.reset) {
+    // Meetings, commissions, documents and conversion events all cascade from
+    // Client, so a reset would destroy work done since the migration.
+    const [meetings, commissions, documents, conversions] = await Promise.all([
+      prisma.meeting.count({ where: { client: { importBatch: args.batch } } }),
+      prisma.commission.count({ where: { client: { importBatch: args.batch }, status: { in: ['INVOICED', 'PAID'] } } }),
+      prisma.document.count({ where: { client: { importBatch: args.batch } } }),
+      prisma.conversionEvent.count({ where: { client: { importBatch: args.batch }, status: 'SENT' } }),
+    ]);
+    const attached = meetings + commissions + documents + conversions;
+    if (attached > 0 && !process.argv.includes('--force-destructive')) {
+      throw new Error(
+        `Refusing to reset: the imported clients already have ${meetings} meeting(s), ` +
+          `${commissions} invoiced/paid commission(s), ${documents} document(s) and ${conversions} uploaded ` +
+          'conversion(s) attached. All of these cascade on delete. Re-run with --force-destructive if that is ' +
+          'genuinely what you want.',
+      );
+    }
+
     const deleted = await prisma.client.deleteMany({ where: { importBatch: args.batch } });
     console.log(`Removed ${deleted.count} previously imported clients (batch "${args.batch}").`);
   }
@@ -66,6 +88,9 @@ async function main(): Promise<void> {
   if (existing > 0 && !args.reset) {
     throw new Error(`Database already holds ${existing} clients. Re-run with --reset to replace the imported batch.`);
   }
+  // References continue from whatever already exists so a re-import cannot
+  // collide with clients created by the website form in the meantime.
+  const startingSequence = await highestReference();
 
   // Reference tables first, so clients can link to them.
   const centreNames = unique(mapped.map((m) => m.client.regionalCentreName));
@@ -96,7 +121,7 @@ async function main(): Promise<void> {
 
   // Clients, numbered in export order so references are stable across re-imports.
   const createdByName = new Map<string, string>();
-  let sequence = 0;
+  let sequence = startingSequence;
   for (const m of mapped) {
     sequence += 1;
     const { regionalCentreName, projectName, ...rest } = m.client;
@@ -138,7 +163,11 @@ async function main(): Promise<void> {
       unlinked.push(client.referredByName);
     }
   }
-  console.log(`Linked ${linked} referrals to existing client records; ${unlinked.length} referrers are not clients.`);
+  const distinctUnlinked = [...new Set(unlinked)].sort();
+  console.log(`Linked ${linked} referrals to existing client records; ${distinctUnlinked.length} referrers are not clients.`);
+  if (distinctUnlinked.length && process.argv.includes('--verbose')) {
+    console.log('Unlinked referrers:', distinctUnlinked.join(', '));
+  }
 
   await prisma.auditLog.create({
     data: {
@@ -152,6 +181,15 @@ async function main(): Promise<void> {
 
   report(mapped, warnings);
   await verify(args.batch);
+}
+
+/** Highest numeric reference already allocated, so the import continues from it. */
+async function highestReference(): Promise<number> {
+  const rows = await prisma.$queryRaw<Array<{ max: number | null }>>`
+    SELECT MAX(NULLIF(regexp_replace("reference", '\D', '', 'g'), '')::bigint) AS max FROM "Client"
+  `;
+  const max = Number(rows[0]?.max ?? 0);
+  return Number.isFinite(max) ? max : 0;
 }
 
 function unique(values: Array<string | null>): string[] {

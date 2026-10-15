@@ -15,7 +15,12 @@ export default async function EditClientPage({ params }: { params: Promise<{ id:
   const client = await prisma.client.findUnique({ where: { id } });
   if (!client) notFound();
 
-  const options = await getClientFormOptions(id);
+  const options = await getClientFormOptions(id, {
+    ownerId: client.ownerId,
+    referredById: client.referredById,
+    regionalCentreId: client.regionalCentreId,
+    projectId: client.projectId,
+  });
   const action = updateClientAction.bind(null, id);
 
   return (

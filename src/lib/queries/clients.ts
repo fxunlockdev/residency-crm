@@ -1,8 +1,18 @@
 import 'server-only';
 import type { ClientStatus, LeadSource, Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
-import { ACTIVE_STATUSES } from '@/lib/pipeline';
+import { ACTIVE_STATUSES, STATUS_ORDER } from '@/lib/pipeline';
+import { SOURCE_LABEL } from '@/lib/labels';
 import { RETROGRESSION_COUNTRIES } from '@/lib/labels';
+
+/** Query-string values are untrusted; an unknown enum must be ignored, not cast. */
+export function asClientStatus(value: string | undefined): ClientStatus | null {
+  return value && (STATUS_ORDER as string[]).includes(value) ? (value as ClientStatus) : null;
+}
+
+export function asLeadSource(value: string | undefined): LeadSource | null {
+  return value && Object.prototype.hasOwnProperty.call(SOURCE_LABEL, value) ? (value as LeadSource) : null;
+}
 
 /** Sentinel for the country filter: every chargeability-affected country at once. */
 export const RETROGRESSION_FILTER = '__retrogression__';
@@ -21,13 +31,18 @@ export type ClientFilters = {
   page?: number;
 };
 
+/**
+ * Every sort ends with `id` so the order is total. Without a tiebreaker,
+ * Postgres may place tied rows differently between the page query and the
+ * count, so a record can appear on two pages or on none.
+ */
 const SORTS: Record<string, Prisma.ClientOrderByWithRelationInput[]> = {
-  name: [{ lastName: 'asc' }, { fullName: 'asc' }],
-  recent: [{ updatedAt: 'desc' }],
-  created: [{ createdAt: 'desc' }],
-  followUp: [{ followUpDate: { sort: 'asc', nulls: 'last' } }],
-  stage: [{ status: 'asc' }, { fullName: 'asc' }],
-  reference: [{ reference: 'asc' }],
+  name: [{ lastName: 'asc' }, { fullName: 'asc' }, { id: 'asc' }],
+  recent: [{ updatedAt: 'desc' }, { id: 'asc' }],
+  created: [{ createdAt: 'desc' }, { id: 'asc' }],
+  followUp: [{ followUpDate: { sort: 'asc', nulls: 'last' } }, { id: 'asc' }],
+  stage: [{ status: 'asc' }, { fullName: 'asc' }, { id: 'asc' }],
+  reference: [{ reference: 'asc' }, { id: 'asc' }],
 };
 
 export function buildClientWhere(filters: ClientFilters): Prisma.ClientWhereInput {
@@ -50,13 +65,15 @@ export function buildClientWhere(filters: ClientFilters): Prisma.ClientWhereInpu
     });
   }
 
-  if (filters.status) {
-    and.push({ status: filters.status as ClientStatus });
+  const status = asClientStatus(filters.status);
+  if (status) {
+    and.push({ status });
   } else if (!filters.includeLost) {
     and.push({ status: { in: ACTIVE_STATUSES } });
   }
 
-  if (filters.source) and.push({ source: filters.source as LeadSource });
+  const source = asLeadSource(filters.source);
+  if (source) and.push({ source });
   if (filters.centre) and.push({ regionalCentreId: filters.centre });
   if (filters.project) and.push({ projectId: filters.project });
   if (filters.country === RETROGRESSION_FILTER) {
@@ -70,7 +87,8 @@ export function buildClientWhere(filters: ClientFilters): Prisma.ClientWhereInpu
 }
 
 export async function listClients(filters: ClientFilters) {
-  const page = Math.max(1, filters.page ?? 1);
+  const requested = filters.page ?? 1;
+  const page = Number.isSafeInteger(requested) ? Math.min(Math.max(1, requested), 10_000) : 1;
   const where = buildClientWhere(filters);
   const orderBy = SORTS[filters.sort ?? 'name'] ?? SORTS.name;
 

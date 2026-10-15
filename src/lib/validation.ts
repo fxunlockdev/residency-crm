@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { parseIsoDate } from './dates';
+import { parseIsoDate, parseIsoDateTime } from './dates';
 import { parseMoneyToCents } from './money';
 
 /** FormData gives '' for untouched inputs and null for absent ones; both mean "no value". */
@@ -29,12 +29,15 @@ const optionalDate = z
 const optionalDateTime = z
   .union([z.string(), z.null(), z.undefined()])
   .transform((value) => (typeof value === 'string' ? value.trim() : ''))
-  .refine((value) => value === '' || !Number.isNaN(new Date(value).getTime()), { message: 'Enter a valid date and time.' })
-  .transform((value) => (value === '' ? null : new Date(value)));
+  .refine((value) => value === '' || parseIsoDateTime(value) !== null, { message: 'Enter a valid date and time.' })
+  .transform((value) => (value === '' ? null : parseIsoDateTime(value)));
 
 const optionalMoney = z
   .union([z.string(), z.number(), z.null(), z.undefined()])
   .transform((value) => (typeof value === 'number' ? String(value) : typeof value === 'string' ? value.trim() : ''))
+  .refine((value) => value === '' || /^-?\d{1,12}(\.\d{1,2})?$/.test(value.replace(/[$,\s]/g, '')), {
+    message: 'Enter a plain amount, for example 800000 or 800000.50.',
+  })
   .refine((value) => value === '' || parseMoneyToCents(value) !== null, { message: 'Enter an amount, for example 800000.' })
   .refine((value) => {
     const cents = parseMoneyToCents(value);
@@ -98,8 +101,8 @@ export const meetingSchema = z.object({
     .string()
     .trim()
     .min(1, 'Enter when the meeting happened.')
-    .refine((value) => !Number.isNaN(new Date(value).getTime()), { message: 'Enter a valid date and time.' })
-    .transform((value) => new Date(value)),
+    .refine((value) => parseIsoDateTime(value) !== null, { message: 'Enter a valid date and time.' })
+    .transform((value) => parseIsoDateTime(value) as Date),
   type: z.enum(['CALL', 'ZOOM', 'IN_PERSON', 'WHATSAPP']),
   attendees: optionalText(240),
   summary: optionalText(8000),
@@ -107,7 +110,8 @@ export const meetingSchema = z.object({
 
 export const commissionSchema = z.object({
   clientId: z.string().min(1),
-  amount: optionalMoney,
+  // Required: an empty box used to write $0 over a real figure with no audit row.
+  amount: optionalMoney.refine((cents) => cents !== null, { message: 'Enter the commission amount.' }),
   trigger: z.enum(['ON_FUNDING', 'ON_I526E_FILING', 'ON_I526E_APPROVAL', 'OTHER']),
   status: z.enum(['NOT_DUE', 'DUE', 'INVOICED', 'PAID', 'DISPUTED']),
   invoiceNumber: optionalText(60),

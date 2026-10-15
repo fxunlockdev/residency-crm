@@ -214,7 +214,7 @@ export function ClientForm({
           <input
             id="investmentAmount"
             name="investmentAmount"
-            defaultValue={client?.investmentAmountCents ? String(client.investmentAmountCents / 100) : ''}
+            defaultValue={client?.investmentAmountCents != null ? String(client.investmentAmountCents / 100) : ''}
             className="field"
             inputMode="decimal"
             placeholder="800000"

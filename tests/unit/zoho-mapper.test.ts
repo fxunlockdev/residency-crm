@@ -156,6 +156,34 @@ describe('mapZohoRow — commissions', () => {
     expect(warnings.join(' ')).toContain('without a Res Invest fee');
   });
 
+  it('keeps the whole fee on one instalment when only funding was paid', () => {
+    // Inventing a second, unpaid instalment for the other half would understate
+    // what was received and overstate what is still due.
+    const { commissions } = mapZohoRow({
+      ...SAMPLE,
+      'Res Invest Fee (US $)': '$30,000',
+      'Funding Payment Date': '12/02/2019',
+      'Filing Payment Date': '',
+    });
+    expect(commissions).toHaveLength(1);
+    expect(commissions[0]!.trigger).toBe('ON_FUNDING');
+    expect(commissions[0]!.amountCents).toBe(3_000_000);
+    expect(commissions[0]!.status).toBe('PAID');
+    expect(commissions[0]!.amountReceivedCents).toBe(3_000_000);
+  });
+
+  it('keeps the whole fee on the filing instalment when only filing was paid', () => {
+    const { commissions } = mapZohoRow({
+      ...SAMPLE,
+      'Res Invest Fee (US $)': '$30,000',
+      'Funding Payment Date': '',
+      'Filing Payment Date': '12/02/2019',
+    });
+    expect(commissions).toHaveLength(1);
+    expect(commissions[0]!.trigger).toBe('ON_I526E_FILING');
+    expect(commissions[0]!.amountCents).toBe(3_000_000);
+  });
+
   it('can keep the fee whole when splitting is disabled', () => {
     const { commissions } = mapZohoRow(staged, { splitStagedFee: false });
     expect(commissions[0]!.amountCents).toBe(4_000_000);

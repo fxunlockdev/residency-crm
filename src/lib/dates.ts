@@ -15,6 +15,19 @@ export function parseUkDate(input: string | null | undefined): Date | null {
   return date;
 }
 
+/**
+ * Parse an <input type="datetime-local"> value ("yyyy-mm-ddThh:mm") as UTC.
+ * `new Date(value)` on a bare local datetime is interpreted in the *server's*
+ * zone, so the same wall clock would store a different instant per deployment.
+ */
+export function parseIsoDateTime(input: string | null | undefined): Date | null {
+  if (!input) return null;
+  const match = input.trim().match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/);
+  if (!match) return null;
+  const date = new Date(`${match[1]}-${match[2]}-${match[3]}T${match[4]}:${match[5]}:${match[6] ?? '00'}.000Z`);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
 /** Parse an <input type="date"> value ("yyyy-mm-dd") into a UTC-midnight Date. */
 export function parseIsoDate(input: string | null | undefined): Date | null {
   if (!input) return null;
@@ -51,6 +64,9 @@ export function formatDateTime(date: Date | null | undefined): string {
     hour: '2-digit',
     minute: '2-digit',
     hour12: false,
+    // Without this the time renders in the server's zone while every stored
+    // value and every form input is UTC.
+    timeZone: 'UTC',
   }).format(date);
 }
 

@@ -81,8 +81,8 @@ export default async function DashboardPage() {
                 Two dates that change the maths
               </h2>
               <p className="mt-1 max-w-xl text-sm text-ink-mute">
-                {data.deadlines.feeIncrease.atRisk} client
-                {data.deadlines.feeIncrease.atRisk === 1 ? ' has' : 's have'} not filed an I-526E yet.
+                {data.deadlines.notFiled} client
+                {data.deadlines.notFiled === 1 ? ' has' : 's have'} not filed an I-526E yet.
               </p>
             </div>
             <Link href="/deadlines" className="btn-ghost shrink-0">

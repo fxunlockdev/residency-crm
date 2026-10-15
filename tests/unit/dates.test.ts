@@ -1,5 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { daysUntil, formatDate, formatDateTime, parseIsoDate, parseUkDate, relativeDays, toDateInputValue } from '@/lib/dates';
+import {
+  daysUntil,
+  formatDate,
+  formatDateTime,
+  parseIsoDate,
+  parseIsoDateTime,
+  parseUkDate,
+  relativeDays,
+  toDateInputValue,
+  toDateTimeInputValue,
+} from '@/lib/dates';
 
 describe('parseUkDate', () => {
   it('parses the dd/mm/yyyy export format', () => {
@@ -38,7 +48,9 @@ describe('formatting', () => {
   it('uses one consistent display format', () => {
     expect(formatDate(new Date(Date.UTC(2019, 1, 12)))).toBe('12 Feb 2019');
     expect(formatDate(null)).toBe('—');
-    expect(formatDateTime(new Date(Date.UTC(2019, 1, 12, 14, 30)))).toContain('12 Feb 2019');
+    // Asserted exactly, in UTC: a loose match hid the time rendering in the
+    // server's own timezone. Run under TZ=Pacific/Auckland to prove it.
+    expect(formatDateTime(new Date(Date.UTC(2019, 1, 12, 14, 30)))).toBe('12 Feb 2019, 14:30');
   });
 
   it('round-trips through a date input', () => {
@@ -62,5 +74,23 @@ describe('daysUntil / relativeDays', () => {
     const yesterday = new Date(Date.now() - 86_400_000);
     expect(relativeDays(yesterday)).toBe('1 day overdue');
     expect(relativeDays(null)).toBe('—');
+  });
+});
+
+describe('parseIsoDateTime', () => {
+  it('reads a datetime-local value as UTC rather than server-local time', () => {
+    expect(parseIsoDateTime('2026-02-12T14:30')?.toISOString()).toBe('2026-02-12T14:30:00.000Z');
+    expect(parseIsoDateTime('2026-02-12T14:30:45')?.toISOString()).toBe('2026-02-12T14:30:45.000Z');
+  });
+
+  it('round-trips through the datetime input', () => {
+    const date = new Date(Date.UTC(2026, 1, 12, 14, 30));
+    expect(parseIsoDateTime(toDateTimeInputValue(date))?.getTime()).toBe(date.getTime());
+  });
+
+  it('rejects anything that is not that exact shape', () => {
+    expect(parseIsoDateTime('2026-02-12')).toBeNull();
+    expect(parseIsoDateTime('12/02/2026 14:30')).toBeNull();
+    expect(parseIsoDateTime('')).toBeNull();
   });
 });

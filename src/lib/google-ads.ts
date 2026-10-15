@@ -55,6 +55,7 @@ export function isAdsConfigured(): boolean {
 async function getAccessToken(config: AdsConfig): Promise<string> {
   const response = await fetch('https://oauth2.googleapis.com/token', {
     method: 'POST',
+    signal: AbortSignal.timeout(10_000),
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
       client_id: config.clientId,
@@ -150,7 +151,7 @@ export async function uploadConversions(events: PendingConversion[]): Promise<Up
 
   const response = await fetch(
     `https://googleads.googleapis.com/${GOOGLE_ADS_API_VERSION}/customers/${config.customerId}:uploadClickConversions`,
-    { method: 'POST', headers, body: JSON.stringify(body) },
+    { method: 'POST', headers, body: JSON.stringify(body), signal: AbortSignal.timeout(30_000) },
   );
 
   if (!response.ok) {
@@ -164,10 +165,24 @@ export async function uploadConversions(events: PendingConversion[]): Promise<Up
     results?: Array<Record<string, unknown>>;
   };
 
-  // With partialFailure the response keeps positional results; an empty slot means that row failed.
+  // With partialFailure the response keeps positional results. Only trust that
+  // mapping when the array is actually present and the same length — otherwise
+  // a differently shaped 200 would mark accepted conversions FAILED and the
+  // cron would upload them again, double-counting the value in Google Ads.
+  const results = result.results;
+  if (!Array.isArray(results) || results.length !== uploadable.length) {
+    return outcomes.concat(
+      uploadable.map((event) => ({
+        id: event.id,
+        status: 'SENT' as const,
+        error: 'Google Ads returned 200 with an unexpected result shape; not retried to avoid double counting.',
+      })),
+    );
+  }
+
   return outcomes.concat(
     uploadable.map((event, index) => {
-      const row = result.results?.[index];
+      const row = results[index];
       if (row && Object.keys(row).length > 0) return { id: event.id, status: 'SENT' as const };
       return {
         id: event.id,

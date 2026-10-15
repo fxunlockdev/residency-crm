@@ -1,5 +1,4 @@
 import 'server-only';
-import type { LeadSource } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { WON_STATUSES } from '@/lib/pipeline';
 
@@ -17,57 +16,60 @@ function rate(funded: number, total: number): number {
   return total === 0 ? 0 : Math.round((funded / total) * 1000) / 10;
 }
 
+/**
+ * Aggregated in Postgres rather than by loading every client and every
+ * commission into the process — this page would otherwise be the first thing
+ * to exhaust memory as the book grows.
+ */
 export async function getLeadSourceBreakdown() {
-  const clients = await prisma.client.findMany({
-    select: {
-      source: true,
-      status: true,
-      utmCampaign: true,
-      keyword: true,
-      gclid: true,
-      commissions: { select: { amountCents: true } },
-    },
+  const [sourceRows, campaignRows, commissionRows, gclidCount, total] = await Promise.all([
+    prisma.client.groupBy({ by: ['source', 'status'], _count: { _all: true } }),
+    prisma.client.groupBy({ by: ['utmCampaign', 'status'], where: { utmCampaign: { not: null } }, _count: { _all: true } }),
+    prisma.$queryRaw<Array<{ source: string; campaign: string | null; cents: bigint }>>`
+      SELECT c."source"::text AS source, c."utmCampaign" AS campaign, COALESCE(SUM(m."amountCents"), 0)::bigint AS cents
+      FROM "Client" c LEFT JOIN "Commission" m ON m."clientId" = c."id"
+      GROUP BY c."source", c."utmCampaign"
+    `,
+    prisma.client.count({ where: { gclid: { not: null } } }),
+    prisma.client.count(),
+  ]);
+
+  const blank = (key: string): SourceRow => ({
+    key,
+    label: key,
+    total: 0,
+    funded: 0,
+    lost: 0,
+    commissionCents: 0,
+    fundedRate: 0,
   });
 
-  const bySource = new Map<LeadSource, SourceRow>();
+  const bySource = new Map<string, SourceRow>();
+  for (const row of sourceRows) {
+    const entry = bySource.get(row.source) ?? blank(row.source);
+    entry.total += row._count._all;
+    if (WON_STATUSES.includes(row.status)) entry.funded += row._count._all;
+    if (row.status === 'LOST') entry.lost += row._count._all;
+    bySource.set(row.source, entry);
+  }
+
   const byCampaign = new Map<string, SourceRow>();
+  for (const row of campaignRows) {
+    const key = row.utmCampaign ?? 'Campaign not recorded';
+    const entry = byCampaign.get(key) ?? blank(key);
+    entry.total += row._count._all;
+    if (WON_STATUSES.includes(row.status)) entry.funded += row._count._all;
+    if (row.status === 'LOST') entry.lost += row._count._all;
+    byCampaign.set(key, entry);
+  }
 
-  for (const client of clients) {
-    const won = WON_STATUSES.includes(client.status);
-    const lost = client.status === 'LOST';
-    const commissionCents = client.commissions.reduce((sum, c) => sum + c.amountCents, 0);
-
-    const sourceRow = bySource.get(client.source) ?? {
-      key: client.source,
-      label: client.source,
-      total: 0,
-      funded: 0,
-      lost: 0,
-      commissionCents: 0,
-      fundedRate: 0,
-    };
-    sourceRow.total += 1;
-    if (won) sourceRow.funded += 1;
-    if (lost) sourceRow.lost += 1;
-    sourceRow.commissionCents += commissionCents;
-    bySource.set(client.source, sourceRow);
-
-    if (client.source === 'GOOGLE_ADS' || client.utmCampaign) {
-      const key = client.utmCampaign ?? 'Campaign not recorded';
-      const campaignRow = byCampaign.get(key) ?? {
-        key,
-        label: key,
-        total: 0,
-        funded: 0,
-        lost: 0,
-        commissionCents: 0,
-        fundedRate: 0,
-      };
-      campaignRow.total += 1;
-      if (won) campaignRow.funded += 1;
-      if (lost) campaignRow.lost += 1;
-      campaignRow.commissionCents += commissionCents;
-      byCampaign.set(key, campaignRow);
+  for (const row of commissionRows) {
+    const cents = Number(row.cents);
+    const sourceEntry = bySource.get(row.source);
+    if (sourceEntry) sourceEntry.commissionCents += cents;
+    if (row.campaign) {
+      const campaignEntry = byCampaign.get(row.campaign);
+      if (campaignEntry) campaignEntry.commissionCents += cents;
     }
   }
 
@@ -85,7 +87,7 @@ export async function getLeadSourceBreakdown() {
     sources: finish([...bySource.values()]),
     campaigns: finish([...byCampaign.values()]),
     conversions,
-    withGclid: clients.filter((c) => !!c.gclid).length,
-    total: clients.length,
+    withGclid: gclidCount,
+    total,
   };
 }

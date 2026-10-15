@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import type { DocumentKind } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
-import { AuthError, requireRoleOrThrow } from '@/lib/auth';
+import { AuthError, requireRoleOrThrow, requireRoleOrRedirect } from '@/lib/auth';
 import { recordAudit } from '@/lib/audit';
 import { removeUpload, storeUpload, UploadError } from '@/lib/storage';
 import type { FormState } from './client-actions';
@@ -27,8 +27,19 @@ export async function uploadDocumentAction(_previous: FormState, formData: FormD
   if (!clientId && !commissionId) return { message: 'Attach the file to a client or a commission.' };
   if (!(file instanceof File)) return { message: 'Choose a file to upload.' };
 
+  // Check the record exists before any bytes land on the volume, otherwise a
+  // failed insert leaves an unreferenced file that no retention process finds.
+  if (clientId && (await prisma.client.count({ where: { id: clientId } })) === 0) {
+    return { message: 'That client no longer exists.' };
+  }
+  if (commissionId && (await prisma.commission.count({ where: { id: commissionId } })) === 0) {
+    return { message: 'That commission no longer exists.' };
+  }
+
+  let storageKey: string | null = null;
   try {
     const stored = await storeUpload(file);
+    storageKey = stored.storageKey;
     const document = await prisma.document.create({
       data: {
         kind,
@@ -51,8 +62,11 @@ export async function uploadDocumentAction(_previous: FormState, formData: FormD
       summary: `${user.name} uploaded ${file.name}`,
     });
   } catch (error) {
+    // Never leave the bytes behind when the row could not be written.
+    if (storageKey) await removeUpload(storageKey);
     if (error instanceof UploadError) return { message: error.message };
-    throw error;
+    console.error('Document upload failed', error instanceof Error ? error.message : error);
+    return { message: 'The file could not be saved. Try again.' };
   }
 
   if (clientId) revalidatePath(`/clients/${clientId}`);
@@ -60,7 +74,7 @@ export async function uploadDocumentAction(_previous: FormState, formData: FormD
 }
 
 export async function deleteDocumentAction(formData: FormData): Promise<void> {
-  const user = await requireRoleOrThrow('ADVISOR');
+  const user = await requireRoleOrRedirect('ADVISOR');
   const id = String(formData.get('documentId') ?? '');
   const document = await prisma.document.findUnique({ where: { id } });
   if (!document) return;

@@ -81,3 +81,16 @@ export async function requireRoleOrThrow(minimum: Role): Promise<CurrentUser> {
 }
 
 export class AuthError extends Error {}
+
+/**
+ * For the plain <form action={...}> handlers that return void: a lapsed or
+ * revoked session should send the user to sign in again, not to the error
+ * boundary. redirect() throws its own control-flow signal, so it is called
+ * outside any try/catch.
+ */
+export async function requireRoleOrRedirect(minimum: Role): Promise<CurrentUser> {
+  const user = await getCurrentUser();
+  if (!user) redirect('/login');
+  if (!hasRole(user, minimum)) redirect('/?denied=1');
+  return user;
+}

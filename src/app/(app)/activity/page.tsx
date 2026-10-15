@@ -19,7 +19,8 @@ export default async function ActivityPage({
 }) {
   const params = await searchParams;
   const pageParam = Array.isArray(params.page) ? params.page[0] : params.page;
-  const page = Math.max(1, Number(pageParam ?? '1') || 1);
+  const requested = Number(pageParam ?? '1') || 1;
+  const page = Number.isSafeInteger(requested) ? Math.min(Math.max(1, requested), 10_000) : 1;
   const onlyStatus = (Array.isArray(params.filter) ? params.filter[0] : params.filter) === 'status';
 
   const where = onlyStatus ? { action: 'status_changed' } : {};

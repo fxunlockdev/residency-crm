@@ -31,7 +31,8 @@ const VIEWS = [
 export default async function CommissionsPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
   const params = await searchParams;
   const view = one(params, 'view') ?? (one(params, 'status') ? 'all' : 'action');
-  const statusFilter = one(params, 'status') as CommissionStatus | undefined;
+  const rawStatus = one(params, 'status');
+  const statusFilter = rawStatus && rawStatus in COMMISSION_STATUS_LABEL ? (rawStatus as CommissionStatus) : undefined;
   const today = todayUtc();
   const user = await getCurrentUser();
   const canEdit = !!user && hasRole(user, 'ADVISOR');

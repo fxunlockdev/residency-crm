@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getCurrentUser, hasRole } from '@/lib/auth';
+import { safeEqual } from '@/lib/client-ip';
 import { isAdsConfigured, uploadConversions, type PendingConversion } from '@/lib/google-ads';
 
 export const dynamic = 'force-dynamic';
@@ -57,9 +58,7 @@ async function flush() {
 
 export async function GET(request: NextRequest) {
   const secret = process.env.CRON_SECRET;
-  const authorised = secret
-    ? request.headers.get('authorization') === `Bearer ${secret}`
-    : false;
+  const authorised = secret ? safeEqual(request.headers.get('authorization'), `Bearer ${secret}`) : false;
 
   if (!authorised) {
     const user = await getCurrentUser();
