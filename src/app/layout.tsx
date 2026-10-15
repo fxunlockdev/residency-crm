@@ -1,19 +1,28 @@
 import type { Metadata, Viewport } from 'next';
-import { Fraunces, Manrope } from 'next/font/google';
+import localFont from 'next/font/local';
 import './globals.css';
 
-const serif = Fraunces({
-  subsets: ['latin'],
-  weight: ['300', '400', '500', '600'],
+/**
+ * Both typefaces are self-hosted variable fonts (latin subset).
+ * That keeps the build reproducible without reaching Google at build time, and
+ * removes a third-party connection at runtime.
+ */
+const fraunces = localFont({
+  src: '../fonts/fraunces-latin-variable.woff2',
+  weight: '300 700',
+  style: 'normal',
   variable: '--font-serif',
   display: 'swap',
+  fallback: ['Georgia', 'serif'],
 });
 
-const sans = Manrope({
-  subsets: ['latin'],
-  weight: ['400', '500', '600', '700'],
+const manrope = localFont({
+  src: '../fonts/manrope-latin-variable.woff2',
+  weight: '400 800',
+  style: 'normal',
   variable: '--font-sans',
   display: 'swap',
+  fallback: ['system-ui', 'sans-serif'],
 });
 
 export const metadata: Metadata = {
@@ -30,7 +39,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${serif.variable} ${sans.variable}`}>
+    <html lang="en" className={`${fraunces.variable} ${manrope.variable}`}>
       <body>{children}</body>
     </html>
   );
