@@ -54,7 +54,10 @@ export function PipelineBoard({ cards, canEdit }: { cards: BoardCard[]; canEdit:
 
   return (
     <div
-      className={clsx('overflow-x-auto pb-4 transition-opacity', pending && 'opacity-70')}
+      // `relative` matters: the sr-only labels on each card are absolutely
+      // positioned, and without a containing block here they escape the scroll
+      // track and widen the whole page (851px of phantom scroll on mobile).
+      className={clsx('relative max-w-full overflow-x-auto pb-4 transition-opacity', pending && 'opacity-70')}
       aria-busy={pending}
     >
       <div className="flex min-w-max gap-4">

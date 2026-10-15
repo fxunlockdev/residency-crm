@@ -103,7 +103,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <MobileNav groups={groups} />
         </header>
 
-        <main id="main" className="mx-auto w-full max-w-shell flex-1 px-4 py-8 sm:px-8 lg:px-10 lg:py-10">
+        <main id="main" className="mx-auto w-full min-w-0 max-w-shell flex-1 px-4 py-8 sm:px-8 lg:px-10 lg:py-10">
           {children}
         </main>
 
