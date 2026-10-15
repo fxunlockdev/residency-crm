@@ -5,7 +5,8 @@ import { PageHeader } from '@/components/ui/page-header';
 import { StatusChip } from '@/components/ui/chips';
 import { EmptyState } from '@/components/ui/empty-state';
 import { PRE_FILING_STATUSES } from '@/lib/pipeline';
-import { FEE_INCREASE_DATE, INVESTMENT_INCREASE_DATE, daysUntil, formatDate } from '@/lib/dates';
+import { FEE_INCREASE_DATE, INVESTMENT_INCREASE_DATE, formatDate } from '@/lib/dates';
+import { DeadlineSummary } from '@/components/ui/deadline-summary';
 import { formatCents } from '@/lib/money';
 
 export const metadata: Metadata = { title: 'Deadlines' };
@@ -29,9 +30,6 @@ export default async function DeadlinesPage() {
     },
   });
 
-  const feeDays = daysUntil(FEE_INCREASE_DATE);
-  const investmentDays = daysUntil(INVESTMENT_INCREASE_DATE);
-
   return (
     <>
       <PageHeader
@@ -41,17 +39,17 @@ export default async function DeadlinesPage() {
       />
 
       <div className="mb-8 grid gap-4 sm:grid-cols-2">
-        <DeadlineCard
-          title="I-526E filing fee increase"
+        <DeadlineSummary
+          variant="card"
+          label="I-526E filing fee increase"
           date={FEE_INCREASE_DATE}
-          days={feeDays}
-          detail="File before this date to avoid the higher USCIS fee."
+          note="File before this date to avoid the higher USCIS fee."
         />
-        <DeadlineCard
-          title="Minimum investment increase"
+        <DeadlineSummary
+          variant="card"
+          label="Minimum investment increase"
           date={INVESTMENT_INCREASE_DATE}
-          days={investmentDays}
-          detail="TEA minimum rises from $800,000 to roughly $937,500."
+          note="TEA minimum rises from $800,000 to roughly $937,500."
         />
       </div>
 
@@ -111,22 +109,3 @@ export default async function DeadlinesPage() {
   );
 }
 
-function DeadlineCard({ title, date, days, detail }: { title: string; date: Date; days: number | null; detail: string }) {
-  const passed = days !== null && days < 0;
-  const urgent = days !== null && days >= 0 && days <= 60;
-
-  return (
-    <div
-      className={`rounded-xl2 border px-6 py-5 ${
-        passed ? 'border-line bg-cream-deep/40' : urgent ? 'border-pink/35 bg-pink-wash/50' : 'border-line bg-cream-warm'
-      }`}
-    >
-      <p className="eyebrow">{title}</p>
-      <p className="mt-2 font-serif text-2xl font-medium">{formatDate(date)}</p>
-      <p className={`mt-1 text-sm font-semibold tabular ${urgent ? 'text-pink-deep' : 'text-ink-mute'}`}>
-        {passed ? 'Deadline passed' : `${days} days remaining`}
-      </p>
-      <p className="mt-2 text-sm text-ink-mute">{detail}</p>
-    </div>
-  );
-}

@@ -5,7 +5,8 @@ import { Metric } from '@/components/ui/metric';
 import { PageHeader } from '@/components/ui/page-header';
 import { StatusChip } from '@/components/ui/chips';
 import { formatCents, formatCentsCompact } from '@/lib/money';
-import { daysUntil, formatDate, relativeDays } from '@/lib/dates';
+import { formatDate, relativeDays } from '@/lib/dates';
+import { DeadlineSummary } from '@/components/ui/deadline-summary';
 import { STATUS_SHORT_LABEL, STATUS_TONE } from '@/lib/pipeline';
 
 export const metadata: Metadata = { title: 'Dashboard' };
@@ -23,8 +24,6 @@ const BAR_TONE: Record<string, string> = {
 export default async function DashboardPage() {
   const data = await getDashboard();
   const maxStage = Math.max(1, ...data.pipeline.map((stage) => stage.count));
-  const feeDays = daysUntil(data.deadlines.feeIncrease.date);
-  const investmentDays = daysUntil(data.deadlines.investmentIncrease.date);
 
   return (
     <>
@@ -92,19 +91,18 @@ export default async function DashboardPage() {
           </div>
 
           <div className="grid border-t border-line sm:grid-cols-2">
-            <DeadlineCell
+            <DeadlineSummary
               label="Filing fee increase"
-              date={formatDate(data.deadlines.feeIncrease.date)}
-              days={feeDays}
+              date={data.deadlines.feeIncrease.date}
               note="File the I-526E before this date to avoid the higher fee."
             />
-            <DeadlineCell
-              label="Investment increase"
-              date={formatDate(data.deadlines.investmentIncrease.date)}
-              days={investmentDays}
-              note="TEA minimum rises from $800k to roughly $937.5k."
-              bordered
-            />
+            <div className="border-t border-line sm:border-l sm:border-t-0">
+              <DeadlineSummary
+                label="Investment increase"
+                date={data.deadlines.investmentIncrease.date}
+                note="TEA minimum rises from $800k to roughly $937.5k."
+              />
+            </div>
           </div>
         </div>
       </section>
@@ -229,40 +227,3 @@ export default async function DashboardPage() {
   );
 }
 
-function DeadlineCell({
-  label,
-  date,
-  days,
-  note,
-  bordered,
-}: {
-  label: string;
-  date: string;
-  days: number | null;
-  note: string;
-  bordered?: boolean;
-}) {
-  const passed = days !== null && days < 0;
-  const urgent = days !== null && days >= 0 && days <= 60;
-
-  return (
-    <div className={`px-6 py-5 ${bordered ? 'border-t border-line sm:border-l sm:border-t-0' : ''}`}>
-      <p className="eyebrow">{label}</p>
-      <p className="mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-1">
-        <span className="font-serif text-xl font-medium">{date}</span>
-        <span
-          className={`chip ${
-            passed
-              ? 'border-line bg-cream-deep text-ink-mute'
-              : urgent
-                ? 'border-pink-deep/30 bg-pink-wash text-pink-deep'
-                : 'border-stage-emerald/25 bg-stage-emerald/10 text-stage-emerald'
-          }`}
-        >
-          {passed ? 'Passed' : `${days} days left`}
-        </span>
-      </p>
-      <p className="mt-2 text-sm text-ink-mute">{note}</p>
-    </div>
-  );
-}

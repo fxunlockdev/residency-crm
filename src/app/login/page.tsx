@@ -50,7 +50,7 @@ export default async function LoginPage({
             ['Then', '1 Jan 2027'],
           ].map(([label, value]) => (
             <div key={label}>
-              <dt className="eyebrow text-cream/45">{label}</dt>
+              <dt className="eyebrow text-cream/65">{label}</dt>
               <dd className="mt-1.5 font-serif text-lg text-cream">{value}</dd>
             </div>
           ))}
