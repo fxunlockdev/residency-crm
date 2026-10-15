@@ -34,7 +34,7 @@ export function Metric({
     tone === 'accent' && 'border-pink/30 bg-pink-wash/50',
     tone === 'alert' && 'border-pink-deep/25',
     tone === 'default' && 'border-line',
-    href && 'hover:-translate-y-0.5 hover:shadow-lift',
+    href && 'group hover:-translate-y-0.5 hover:shadow-lift',
   );
 
   if (!href) return <div className={base}>{body}</div>;
@@ -42,7 +42,10 @@ export function Metric({
   return (
     <Link href={href} className={clsx(base, 'block')}>
       {body}
-      <span aria-hidden className="absolute bottom-4 right-5 text-ink-mute transition-transform duration-200 ease-out">
+      <span
+        aria-hidden
+        className="absolute bottom-4 right-5 text-ink-mute transition-transform duration-200 ease-out group-hover:translate-x-0.5"
+      >
         →
       </span>
     </Link>

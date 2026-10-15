@@ -49,7 +49,7 @@ export function SidebarNav({ groups }: { groups: NavGroup[] }) {
                     {item.badge ? (
                       <span
                         className={clsx(
-                          'rounded-full px-1.5 py-0.5 text-[0.6875rem] font-semibold tabular',
+                          'rounded-full px-1.5 py-0.5 text-micro font-semibold tabular',
                           item.tone === 'alert'
                             ? 'bg-pink text-white'
                             : active
@@ -57,7 +57,7 @@ export function SidebarNav({ groups }: { groups: NavGroup[] }) {
                               : 'bg-cream-deep text-ink-mute',
                         )}
                       >
-                        {item.badge > 99 ? '99+' : item.badge}
+                        {item.badge > 999 ? '999+' : item.badge}
                       </span>
                     ) : null}
                   </Link>

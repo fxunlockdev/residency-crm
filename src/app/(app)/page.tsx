@@ -4,10 +4,9 @@ import { getDashboard } from '@/lib/queries/dashboard';
 import { Metric } from '@/components/ui/metric';
 import { PageHeader } from '@/components/ui/page-header';
 import { StatusChip } from '@/components/ui/chips';
-import { EmptyState } from '@/components/ui/empty-state';
 import { formatCents, formatCentsCompact } from '@/lib/money';
 import { daysUntil, formatDate, relativeDays } from '@/lib/dates';
-import { STATUS_LABEL, STATUS_TONE } from '@/lib/pipeline';
+import { STATUS_SHORT_LABEL, STATUS_TONE } from '@/lib/pipeline';
 
 export const metadata: Metadata = { title: 'Dashboard' };
 export const dynamic = 'force-dynamic';
@@ -126,18 +125,30 @@ export default async function DashboardPage() {
               <li key={stage.status}>
                 <Link
                   href={`/clients?status=${stage.status}`}
-                  className="group grid grid-cols-[11rem_1fr_2.5rem] items-center gap-3 rounded-lg px-2 py-1.5 transition-colors duration-200 hover:bg-cream-deep"
+                  className="group grid grid-cols-[9.5rem_1fr_2.5rem] items-center gap-3 rounded-lg px-2 py-1.5 transition-colors duration-200 hover:bg-cream-deep"
                 >
-                  <span className="truncate text-sm text-ink-soft group-hover:text-ink">
-                    {STATUS_LABEL[stage.status]}
+                  <span
+                    className={`truncate text-sm group-hover:text-ink ${
+                      stage.count === 0 ? 'text-ink-mute' : 'text-ink-soft'
+                    }`}
+                  >
+                    {STATUS_SHORT_LABEL[stage.status]}
                   </span>
                   <span className="h-2 overflow-hidden rounded-full bg-cream-deep">
-                    <span
-                      className={`block h-full rounded-full ${BAR_TONE[STATUS_TONE[stage.status]]} transition-[width] duration-500 ease-out`}
-                      style={{ width: `${Math.round((stage.count / maxStage) * 100)}%` }}
-                    />
+                    {stage.count > 0 ? (
+                      <span
+                        className={`block h-full rounded-full ${BAR_TONE[STATUS_TONE[stage.status]]}`}
+                        style={{ width: `${Math.round((stage.count / maxStage) * 100)}%` }}
+                      />
+                    ) : null}
                   </span>
-                  <span className="text-right text-sm font-semibold tabular text-ink">{stage.count}</span>
+                  <span
+                    className={`text-right text-sm tabular ${
+                      stage.count === 0 ? 'text-ink-mute' : 'font-semibold text-ink'
+                    }`}
+                  >
+                    {stage.count}
+                  </span>
                 </Link>
               </li>
             ))}
@@ -156,7 +167,9 @@ export default async function DashboardPage() {
           </div>
 
           {data.followUps.length === 0 ? (
-            <EmptyState title="Nothing due today" description="Follow-up dates that fall due will appear here." />
+            <p className="py-6 text-sm text-ink-mute">
+              Nothing due today. Follow-up dates that fall due will appear here.
+            </p>
           ) : (
             <ul className="divide-y divide-line">
               {data.followUps.map((client) => (
@@ -194,7 +207,7 @@ export default async function DashboardPage() {
           </Link>
         </div>
         {data.recentActivity.length === 0 ? (
-          <EmptyState title="No activity yet" />
+          <p className="py-6 text-sm text-ink-mute">No activity yet.</p>
         ) : (
           <ol className="space-y-3">
             {data.recentActivity.map((entry) => (

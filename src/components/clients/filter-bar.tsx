@@ -55,7 +55,7 @@ export function ClientFilterBar({
   return (
     <div className="mb-6 space-y-3">
       <div className="flex flex-wrap items-center gap-2">
-        <div className="relative min-w-[16rem] flex-1">
+        <div className="relative min-w-[18rem] flex-[2]">
           <label htmlFor="client-search" className="sr-only">
             Search clients
           </label>
@@ -184,7 +184,7 @@ function Select({
       <select
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="field w-auto min-w-[9rem] py-2 text-sm"
+        className="field w-auto min-w-[9rem] max-w-[13rem] py-2 text-sm"
       >
         {allLabel ? <option value="">{allLabel}</option> : null}
         {options.map((option) => (
