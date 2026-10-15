@@ -1,0 +1,34 @@
+import { NextResponse, type NextRequest } from 'next/server';
+import { prisma } from '@/lib/prisma';
+import { getCurrentUser } from '@/lib/auth';
+import { readUpload } from '@/lib/storage';
+
+/**
+ * Uploaded files are never publicly linkable: every request is authenticated and
+ * the bytes are streamed from the private volume, never served as a static asset.
+ */
+export async function GET(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  const user = await getCurrentUser();
+  if (!user) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 });
+
+  const { id } = await context.params;
+  const document = await prisma.document.findUnique({ where: { id } });
+  if (!document) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+
+  let body: Buffer;
+  try {
+    body = await readUpload(document.storageKey);
+  } catch {
+    return NextResponse.json({ error: 'The stored file is no longer available.' }, { status: 410 });
+  }
+
+  return new NextResponse(new Uint8Array(body), {
+    headers: {
+      'Content-Type': document.mimeType,
+      'Content-Length': String(body.byteLength),
+      'Content-Disposition': `inline; filename="${encodeURIComponent(document.filename)}"`,
+      'Cache-Control': 'private, no-store',
+      'X-Content-Type-Options': 'nosniff',
+    },
+  });
+}

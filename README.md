@@ -1,0 +1,109 @@
+# Residency First — EB-5 Client & Commission Tracker
+
+Tracks every Residency First EB-5 prospect and client from the first Google Ads click
+through to I-829 approval and commission paid.
+
+Built to the 9 October 2026 developer spec: Clients, Meetings and Commissions, with
+Google Ads lead attribution, the five launch views and an audit trail of status changes.
+
+## Stack
+
+| Layer | Choice |
+|---|---|
+| App | Next.js 15 (App Router), React 19, TypeScript |
+| Data | PostgreSQL via Prisma |
+| Auth | In-app email + password, invite-only, three roles |
+| Files | Private volume, served only through an authenticated route |
+| Hosting | Railway (Docker) |
+
+Money is stored as integer US cents throughout. Dates are stored at UTC midnight so a
+calendar day never shifts across timezones.
+
+## Running locally
+
+```bash
+npm install
+cp .env.example .env            # then fill in DATABASE_URL and AUTH_SECRET
+npx prisma migrate deploy
+npx tsx scripts/create-admin.ts --email you@example.com --name "Your Name"
+npm run dev
+```
+
+A throwaway Postgres for development:
+
+```bash
+docker run -d --name rf-crm-pg -e POSTGRES_PASSWORD=devpass -e POSTGRES_USER=rf \
+  -e POSTGRES_DB=rfcrm -p 55432:5432 postgres:16-alpine
+```
+
+## Importing the legacy Zoho export
+
+The export holds client PII and is **never committed**. Supply it at run time:
+
+```bash
+npx tsx scripts/import-zoho.ts --file "/path/to/ZOHO FINAL.csv" --dry-run   # inspect first
+npx tsx scripts/import-zoho.ts --file "/path/to/ZOHO FINAL.csv" --reset     # then load
+```
+
+The importer:
+
+- reads the file as Windows-1252, which is how it was produced;
+- title-cases shouting surnames, expands `UK`/`HK`/`Dubai`, normalises `Eb-5 Capital`
+  and lower-cased proper nouns, and splits packed phone numbers;
+- maps `I-526 Filed` / `I-526 Approved` onto the pipeline, and treats a person's name in
+  the Source column as a referral while keeping the original string;
+- splits a staged `Res Invest Fee` across its funding and filing instalments without
+  losing a cent (`--no-split-fee` keeps it whole);
+- preserves every legacy column on the client record as read-only history;
+- prints a reconciliation report and re-reads the database to prove the totals.
+
+Against the 145-row export it produces 145 clients, 179 commissions, 17 projects and
+3 regional centres, totalling $3,427,000 of commission with $2,817,000 received —
+matching the source file exactly.
+
+## Website lead capture
+
+Add to every page of the marketing site:
+
+```html
+<script src="https://crm.residencyfirst.com/rf-lead.js"
+        data-endpoint="https://crm.residencyfirst.com/api/leads/intake"
+        data-token="YOUR_LEAD_INTAKE_TOKEN"
+        data-form="#enquiry-form" defer></script>
+```
+
+It stores the GCLID and UTM parameters in a first-party cookie for 90 days, and only
+writes that cookie once Google Consent Mode v2 reports `analytics_storage` as granted.
+A record that arrives with a GCLID is marked Google Ads automatically.
+
+## Scheduled jobs
+
+| Path | Purpose |
+|---|---|
+| `GET /api/cron/google-ads` | Uploads queued Lead / Engaged / Funded conversions by GCLID |
+| `GET /api/cron/digest` | Daily digest of follow-ups, commissions due and overdue invoices |
+| `GET /api/health` | Railway healthcheck |
+
+Both cron routes accept `Authorization: Bearer $CRON_SECRET`, or an admin session.
+
+## Deployment
+
+Railway builds the Dockerfile and runs `prisma migrate deploy` before starting. Attach a
+Postgres service and a volume mounted at the path in `UPLOAD_DIR`. Required variables are
+listed in `.env.example`.
+
+## Tests
+
+```bash
+npm test          # unit tests
+npm run typecheck
+npm run build
+```
+
+## Data rules
+
+- No passports, identity documents, source-of-funds evidence or bank details. The
+  attorney holds those.
+- Uploads are private: every download goes through an authenticated route.
+- Status changes are written to an audit log with actor and timestamp.
+- Marketing consent is per client and off by default for every migrated record.

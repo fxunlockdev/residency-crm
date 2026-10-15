@@ -1,0 +1,318 @@
+// Residency First — EB-5 Client & Commission Tracker
+// Money is stored as integer US cents everywhere to avoid floating point drift.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  ADVISOR
+  VIEWER
+}
+
+enum ClientStatus {
+  PROSPECT
+  ENGAGED
+  FUNDED
+  I526E_FILED
+  I526E_APPROVED
+  GREEN_CARD_CONDITIONAL
+  I829_FILED
+  I829_APPROVED
+  LOST
+}
+
+enum LeadSource {
+  GOOGLE_ADS
+  REFERRAL
+  WEBSITE
+  EVENT
+  PARTNER
+  LINKEDIN
+  OTHER
+}
+
+enum MeetingType {
+  CALL
+  ZOOM
+  IN_PERSON
+  WHATSAPP
+}
+
+enum CommissionTrigger {
+  ON_FUNDING
+  ON_I526E_FILING
+  ON_I526E_APPROVAL
+  OTHER
+}
+
+enum CommissionStatus {
+  NOT_DUE
+  DUE
+  INVOICED
+  PAID
+  DISPUTED
+}
+
+enum DocumentKind {
+  I526E_RECEIPT
+  INVOICE
+  OTHER
+}
+
+enum ConversionType {
+  LEAD
+  ENGAGED
+  FUNDED
+}
+
+enum ConversionStatus {
+  PENDING
+  SENT
+  FAILED
+  SKIPPED
+}
+
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  name         String
+  passwordHash String
+  role         Role      @default(VIEWER)
+  isActive     Boolean   @default(true)
+  lastLoginAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  ownedClients Client[]   @relation("ClientOwner")
+  auditLogs    AuditLog[]
+  meetings     Meeting[]
+  documents    Document[]
+
+  @@index([email])
+}
+
+model RegionalCentre {
+  id          String       @id @default(cuid())
+  name        String       @unique
+  isActive    Boolean      @default(true)
+  createdAt   DateTime     @default(now())
+  clients     Client[]
+  commissions Commission[]
+  projects    Project[]
+}
+
+model Project {
+  id               String          @id @default(cuid())
+  name             String          @unique
+  regionalCentreId String?
+  regionalCentre   RegionalCentre? @relation(fields: [regionalCentreId], references: [id], onDelete: SetNull)
+  isActive         Boolean         @default(true)
+  createdAt        DateTime        @default(now())
+  clients          Client[]
+
+  @@index([regionalCentreId])
+}
+
+model Client {
+  id        String @id @default(cuid())
+  reference String @unique
+
+  // Identity
+  fullName       String
+  firstName      String?
+  lastName       String?
+  email          String?
+  secondaryEmail String?
+  phone          String?
+
+  countryOfResidence String?
+  countryOfBirth     String?
+
+  // Attribution
+  source         LeadSource @default(OTHER)
+  sourceRaw      String?
+  referredById   String?
+  referredBy     Client?    @relation("Referrals", fields: [referredById], references: [id], onDelete: SetNull)
+  referrals      Client[]   @relation("Referrals")
+  referredByName String?
+
+  gclid       String?
+  utmSource   String?
+  utmMedium   String?
+  utmCampaign String?
+  keyword     String?
+  landingPage String?
+  leadDate    DateTime?
+
+  // Case
+  status                ClientStatus    @default(PROSPECT)
+  attorney              String?
+  caseWorker            String?
+  regionalCentreId      String?
+  regionalCentre        RegionalCentre? @relation(fields: [regionalCentreId], references: [id], onDelete: SetNull)
+  projectId             String?
+  project               Project?        @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  investmentAmountCents Int?
+
+  dateFunded          DateTime?
+  i526eFiledDate      DateTime?
+  i526eReceiptNumber  String?
+  i526eApprovedDate   DateTime?
+  greenCardIssuedDate DateTime?
+  i829FiledDate       DateTime?
+  i829ApprovedDate    DateTime?
+
+  nextAction       String?
+  followUpDate     DateTime?
+  marketingConsent Boolean   @default(false)
+  notes            String?
+
+  // Legacy fields carried over from the Zoho export (read-only history)
+  legacyContactType    String?
+  legacyBusiness       String?
+  legacyProgramme      String?
+  legacyInvestorStatus String?
+  spouseOrParent       String?
+  adminFeeCents        Int?
+  pmFeeCents           Int?
+  interestReceived     Boolean?
+  interestRatePct      Float?
+  interestToGalerie    Boolean?
+  importBatch          String?
+
+  ownerId String?
+  owner   User?   @relation("ClientOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  meetings    Meeting[]
+  commissions Commission[]
+  documents   Document[]
+  conversions ConversionEvent[]
+
+  @@index([status])
+  @@index([followUpDate])
+  @@index([regionalCentreId])
+  @@index([projectId])
+  @@index([source])
+  @@index([gclid])
+  @@index([lastName])
+}
+
+model Meeting {
+  id         String      @id @default(cuid())
+  clientId   String
+  client     Client      @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  occurredAt DateTime
+  type       MeetingType @default(CALL)
+  attendees  String?
+  summary    String?
+
+  createdById String?
+  createdBy   User?   @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  externalId  String? @unique // Google Calendar event id
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([clientId, occurredAt])
+}
+
+model Commission {
+  id       String @id @default(cuid())
+  clientId String
+  client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  regionalCentreId String?
+  regionalCentre   RegionalCentre? @relation(fields: [regionalCentreId], references: [id], onDelete: SetNull)
+
+  amountCents Int               @default(0)
+  trigger     CommissionTrigger @default(ON_FUNDING)
+  status      CommissionStatus  @default(NOT_DUE)
+
+  invoiceNumber       String?
+  invoiceSentDate     DateTime?
+  paymentDueDate      DateTime?
+  paymentReceivedDate DateTime?
+  amountReceivedCents Int?
+  paidDateUnknown     Boolean   @default(false)
+  notes               String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  documents Document[]
+
+  @@index([clientId])
+  @@index([status])
+  @@index([regionalCentreId])
+  @@index([paymentDueDate])
+}
+
+model Document {
+  id         String       @id @default(cuid())
+  kind       DocumentKind @default(OTHER)
+  filename   String
+  storageKey String       @unique
+  mimeType   String
+  sizeBytes  Int
+
+  clientId     String?
+  client       Client?     @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  commissionId String?
+  commission   Commission? @relation(fields: [commissionId], references: [id], onDelete: Cascade)
+
+  uploadedById String?
+  uploadedBy   User?   @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+
+  @@index([clientId])
+  @@index([commissionId])
+}
+
+model AuditLog {
+  id       String  @id @default(cuid())
+  entity   String
+  entityId String
+  action   String
+  field    String?
+  oldValue String?
+  newValue String?
+  summary  String?
+
+  actorId    String?
+  actor      User?   @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  actorLabel String?
+
+  createdAt DateTime @default(now())
+
+  @@index([entity, entityId])
+  @@index([createdAt])
+}
+
+model ConversionEvent {
+  id         String         @id @default(cuid())
+  clientId   String
+  client     Client         @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  type       ConversionType
+  gclid      String?
+  valueCents Int?
+  occurredAt DateTime       @default(now())
+
+  status    ConversionStatus @default(PENDING)
+  attempts  Int              @default(0)
+  lastError String?
+  sentAt    DateTime?
+
+  @@unique([clientId, type])
+  @@index([status])
+}

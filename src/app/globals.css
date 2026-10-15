@@ -1,0 +1,155 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+  --rf-focus: #C9366B;
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    @apply bg-cream text-ink font-sans antialiased;
+    font-feature-settings: 'ss01', 'cv05';
+  }
+
+  /* Numbers line up in every table and metric. */
+  .tabular,
+  td,
+  th {
+    font-variant-numeric: tabular-nums;
+  }
+
+  h1, h2, h3 {
+    @apply font-serif;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--rf-focus);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  ::selection {
+    background: #FF9DBE;
+    color: #0E0D12;
+  }
+}
+
+@layer components {
+  .eyebrow {
+    @apply text-micro font-semibold uppercase tracking-[0.09em] text-ink-mute;
+  }
+
+  .surface {
+    @apply rounded-xl2 border border-line bg-cream-warm shadow-card;
+  }
+
+  .hairline {
+    @apply border-line;
+  }
+
+  /* Buttons ---------------------------------------------------------- */
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold
+           transition-all duration-200 ease-out disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  .btn-primary {
+    @apply btn border-transparent bg-ink text-cream hover:bg-pink-deep hover:shadow-pink active:translate-y-px;
+  }
+
+  .btn-accent {
+    @apply btn border-transparent bg-pink text-white hover:bg-pink-deep hover:shadow-pink active:translate-y-px;
+  }
+
+  .btn-ghost {
+    @apply btn border-line bg-transparent text-ink hover:border-ink hover:bg-cream-deep active:translate-y-px;
+  }
+
+  .btn-quiet {
+    @apply inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium text-ink-mute
+           transition-colors duration-200 hover:bg-cream-deep hover:text-ink;
+  }
+
+  .btn-danger {
+    @apply btn border-transparent bg-pink-deep text-white hover:bg-[#A82B58] active:translate-y-px;
+  }
+
+  /* Forms ------------------------------------------------------------ */
+  .field-label {
+    @apply mb-1.5 block text-xs font-semibold uppercase tracking-[0.07em] text-ink-mute;
+  }
+
+  .field {
+    @apply w-full rounded-xl border border-line bg-cream-warm px-3.5 py-2.5 text-sm text-ink
+           transition-colors duration-200 placeholder:text-ink-mute/60
+           hover:border-line-strong focus:border-pink-deep focus:outline-none
+           focus:ring-2 focus:ring-pink/30;
+  }
+
+  select.field {
+    @apply appearance-none bg-[length:1rem] bg-[right_0.85rem_center] bg-no-repeat pr-10;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='%236E6A75'%3E%3Cpath d='M5.5 7.5 10 12l4.5-4.5'  stroke='%236E6A75' stroke-width='1.6' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  }
+
+  textarea.field {
+    @apply min-h-[7rem] leading-relaxed;
+  }
+
+  .field-error {
+    @apply mt-1.5 text-xs font-medium text-pink-deep;
+  }
+
+  .field-hint {
+    @apply mt-1.5 text-xs text-ink-mute;
+  }
+
+  /* Tables ----------------------------------------------------------- */
+  .data-table {
+    @apply w-full border-collapse text-sm;
+  }
+
+  .data-table thead th {
+    @apply sticky top-0 z-10 whitespace-nowrap border-b border-line bg-cream-deep/90 px-4 py-2.5
+           text-left text-micro font-semibold uppercase tracking-[0.09em] text-ink-mute backdrop-blur;
+  }
+
+  .data-table tbody td {
+    @apply border-b border-line/70 px-4 py-3 align-middle;
+  }
+
+  .data-table tbody tr {
+    @apply transition-colors duration-150;
+  }
+
+  .data-table tbody tr:hover {
+    @apply bg-pink-wash/60;
+  }
+
+  /* Chips ------------------------------------------------------------ */
+  .chip {
+    @apply inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-1
+           text-xs font-semibold leading-none;
+  }
+
+  .link {
+    @apply font-medium text-ink underline decoration-pink decoration-2 underline-offset-[3px]
+           transition-colors duration-200 hover:text-pink-deep;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
