@@ -12,7 +12,7 @@ export default function GlobalError({ error, reset }: { error: Error & { digest?
     <main className="flex min-h-dvh items-center justify-center px-6 py-16">
       <div className="max-w-md text-center">
         <p className="eyebrow">Something went wrong</p>
-        <h1 className="mt-3 font-serif text-3xl font-medium">We could not load that</h1>
+        <h1 className="h-page mt-3">We could not load that</h1>
         <p className="mt-3 text-sm leading-relaxed text-ink-mute">
           The error has been logged. Try again, and if it keeps happening quote reference{' '}
           <span className="tabular">{error.digest ?? 'unknown'}</span>.

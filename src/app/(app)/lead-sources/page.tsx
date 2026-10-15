@@ -38,12 +38,12 @@ export default async function LeadSourcesPage() {
       ) : null}
 
       <section className="mb-10">
-        <h2 className="mb-3 font-serif text-lg font-medium">By source</h2>
+        <h2 className="h-section mb-3">By source</h2>
         <SourceTable rows={data.sources} labelFor={(key) => SOURCE_LABEL[key as LeadSource] ?? key} />
       </section>
 
       <section>
-        <h2 className="mb-1 font-serif text-lg font-medium">By Google Ads campaign</h2>
+        <h2 className="h-section mb-1">By Google Ads campaign</h2>
         <p className="mb-3 text-sm text-ink-mute">
           {data.withGclid} of {data.total} records carry a GCLID. Attribution is captured by the website enquiry form.
         </p>

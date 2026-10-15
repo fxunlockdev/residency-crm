@@ -41,6 +41,16 @@
 }
 
 @layer components {
+  /* One token for every section heading; it was hand-typed 21 times with
+     four different sizes for the same role. */
+  .h-section {
+    @apply font-serif text-lg font-medium text-ink;
+  }
+
+  .h-page {
+    @apply font-serif text-3xl font-medium text-ink;
+  }
+
   .eyebrow {
     @apply text-micro font-semibold uppercase tracking-[0.09em] text-ink-mute;
   }

@@ -141,7 +141,7 @@ export default async function CommissionsPage({ searchParams }: { searchParams: 
             return (
               <section key={group.name} aria-labelledby={`centre-${group.name}`}>
                 <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
-                  <h2 id={`centre-${group.name}`} className="font-serif text-lg font-medium">
+                  <h2 id={`centre-${group.name}`} className="h-section">
                     {group.name}
                   </h2>
                   <p className="text-sm text-ink-mute tabular">

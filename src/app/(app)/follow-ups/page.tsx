@@ -83,7 +83,7 @@ function Group({ title, clients, tone }: { title: string; clients: Row[]; tone?:
     <section aria-labelledby={`group-${title}`}>
       <h2
         id={`group-${title}`}
-        className="mb-3 flex items-center gap-3 font-serif text-lg font-medium"
+        className="h-section mb-3 flex items-center gap-3"
       >
         {title}
         <span

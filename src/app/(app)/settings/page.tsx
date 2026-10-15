@@ -64,7 +64,7 @@ export default async function SettingsPage() {
       <div className="space-y-12">
         {/* Users */}
         <section aria-labelledby="users-heading">
-          <h2 id="users-heading" className="mb-1 font-serif text-lg font-medium">
+          <h2 id="users-heading" className="h-section mb-1">
             Users and access
           </h2>
           <p className="mb-5 text-sm text-ink-mute">
@@ -135,7 +135,7 @@ export default async function SettingsPage() {
 
         {/* Lead capture */}
         <section aria-labelledby="lead-heading">
-          <h2 id="lead-heading" className="mb-1 font-serif text-lg font-medium">
+          <h2 id="lead-heading" className="h-section mb-1">
             Website lead capture
           </h2>
           <p className="mb-5 max-w-3xl text-sm text-ink-mute">
@@ -160,7 +160,7 @@ export default async function SettingsPage() {
 
         {/* Integrations */}
         <section aria-labelledby="integrations-heading">
-          <h2 id="integrations-heading" className="mb-1 font-serif text-lg font-medium">
+          <h2 id="integrations-heading" className="h-section mb-1">
             Integrations
           </h2>
           <p className="mb-5 text-sm text-ink-mute">
@@ -200,7 +200,7 @@ export default async function SettingsPage() {
 
         {/* Reference data */}
         <section aria-labelledby="reference-heading">
-          <h2 id="reference-heading" className="mb-1 font-serif text-lg font-medium">
+          <h2 id="reference-heading" className="h-section mb-1">
             Regional centres and projects
           </h2>
           <p className="mb-5 text-sm text-ink-mute">Carried over from the legacy export and editable here.</p>
@@ -268,7 +268,7 @@ export default async function SettingsPage() {
 
         {/* Data quality */}
         <section aria-labelledby="quality-heading">
-          <h2 id="quality-heading" className="mb-1 font-serif text-lg font-medium">
+          <h2 id="quality-heading" className="h-section mb-1">
             Data quality
           </h2>
           <p className="mb-5 text-sm text-ink-mute">
@@ -298,7 +298,7 @@ export default async function SettingsPage() {
         </section>
 
         <section aria-labelledby="privacy-heading">
-          <h2 id="privacy-heading" className="mb-1 font-serif text-lg font-medium">
+          <h2 id="privacy-heading" className="h-section mb-1">
             Data rules
           </h2>
           <div className="surface p-6 text-sm leading-relaxed text-ink-soft">

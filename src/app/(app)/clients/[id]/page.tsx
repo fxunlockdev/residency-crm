@@ -52,7 +52,11 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
   const outstanding = commissionTotal - commissionPaid;
 
   const milestones = [
-    { label: 'Prospect created', date: client.createdAt, reached: true },
+    {
+      label: client.importBatch ? 'Record migrated' : 'Record created',
+      date: client.createdAt,
+      reached: true,
+    },
     { label: 'Funded', date: client.dateFunded, reached: !!client.dateFunded },
     { label: 'I-526E filed', date: client.i526eFiledDate, reached: !!client.i526eFiledDate },
     { label: 'I-526E approved', date: client.i526eApprovedDate, reached: !!client.i526eApprovedDate },
@@ -105,11 +109,11 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
         </div>
       ) : null}
 
-      <div className="grid gap-6 lg:grid-cols-[1.35fr_1fr]">
-        <div className="space-y-6">
+      <div className="grid gap-10 lg:grid-cols-[1.35fr_1fr] lg:gap-8">
+        <div className="space-y-10">
           {/* Contact and case */}
-          <section className="surface p-6">
-            <h2 className="mb-5 font-serif text-lg font-medium">Case details</h2>
+          <section>
+            <h2 className="h-section mb-5">Case details</h2>
             <DefinitionList
               items={[
                 {
@@ -188,7 +192,9 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
             {client.notes ? (
               <div className="mt-6 border-t border-line pt-5">
                 <p className="eyebrow mb-2">Notes</p>
-                <p className="whitespace-pre-wrap text-sm leading-relaxed text-ink-soft">{client.notes}</p>
+                <p className="max-w-[68ch] whitespace-pre-wrap text-sm leading-relaxed text-ink-soft">
+                  {client.notes}
+                </p>
               </div>
             ) : null}
           </section>
@@ -196,7 +202,7 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
           {/* Commissions */}
           <section className="surface p-6">
             <div className="mb-5 flex flex-wrap items-baseline justify-between gap-3">
-              <h2 className="font-serif text-lg font-medium">Commissions</h2>
+              <h2 className="h-section">Commissions</h2>
               <p className="text-sm text-ink-mute tabular">
                 {formatCents(commissionTotal)} total · {formatCents(commissionPaid)} received
                 {outstanding > 0 ? ` · ${formatCents(outstanding)} outstanding` : ''}
@@ -269,7 +275,7 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
           {/* Meetings */}
           <section className="surface p-6">
             <div className="mb-5 flex items-baseline justify-between">
-              <h2 className="font-serif text-lg font-medium">Meetings</h2>
+              <h2 className="h-section">Meetings</h2>
               <p className="text-sm text-ink-mute tabular">{client.meetings.length} logged</p>
             </div>
 
@@ -297,7 +303,7 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
                           <p className="mt-1.5 text-xs text-ink-mute">With {meeting.attendees}</p>
                         ) : null}
                         {meeting.summary ? (
-                          <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-ink-soft">
+                          <p className="mt-2 max-w-[68ch] whitespace-pre-wrap text-sm leading-relaxed text-ink-soft">
                             {meeting.summary}
                           </p>
                         ) : null}
@@ -326,14 +332,14 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
         </div>
 
         {/* Right rail */}
-        <div className="space-y-6">
-          <section className="surface p-6">
-            <h2 className="mb-5 font-serif text-lg font-medium">Case timeline</h2>
+        <div className="space-y-10">
+          <section>
+            <h2 className="h-section mb-5">Case timeline</h2>
             <MilestoneTrack milestones={milestones} />
           </section>
 
           <section className="surface p-6">
-            <h2 className="mb-4 font-serif text-lg font-medium">Documents</h2>
+            <h2 className="h-section mb-4">Documents</h2>
             {canEdit ? (
               <div className="mb-5">
                 <DocumentUploader clientId={client.id} />
@@ -375,8 +381,8 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
 
           <LegacyPanel client={client} />
 
-          <section className="surface p-6">
-            <h2 className="mb-4 font-serif text-lg font-medium">Activity</h2>
+          <section className="border-t border-line pt-8">
+            <h2 className="h-section mb-4">Activity</h2>
             {activity.length === 0 ? (
               <p className="text-sm text-ink-mute">Nothing recorded yet.</p>
             ) : (
@@ -396,7 +402,7 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
 
           {canDelete ? (
             <section className="rounded-xl2 border border-stage-rose/25 bg-stage-rose/5 p-6">
-              <h2 className="font-serif text-base font-medium text-stage-rose">Delete this client</h2>
+              <h2 className="h-section text-stage-rose">Delete this client</h2>
               <p className="mt-1.5 text-sm text-ink-mute">
                 Removes the record and everything attached to it. Use “Lost / Not proceeding” instead to keep the
                 history.
@@ -432,11 +438,19 @@ function LegacyPanel({ client }: { client: { legacyInvestorStatus: string | null
   if (!client.importBatch) return null;
 
   return (
-    <section className="surface p-6">
-      <h2 className="font-serif text-lg font-medium">Legacy record</h2>
-      <p className="mb-5 mt-1 text-xs text-ink-mute">
-        Carried over from the Zoho export so nothing was lost in the move. Read-only history.
-      </p>
+    <details className="group border-t border-line pt-8">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-3">
+        <span>
+          <span className="h-section">Legacy record</span>
+          <span className="mt-1 block text-xs text-ink-mute">
+            Carried over from the Zoho export so nothing was lost in the move. Read-only history.
+          </span>
+        </span>
+        <span aria-hidden className="shrink-0 text-ink-mute transition-transform duration-200 group-open:rotate-180">
+          ⌄
+        </span>
+      </summary>
+      <div className="mt-5" />
       <DefinitionList
         items={[
           { label: 'Original status', value: client.legacyInvestorStatus },
@@ -461,6 +475,6 @@ function LegacyPanel({ client }: { client: { legacyInvestorStatus: string | null
           { label: 'Programme', value: client.legacyProgramme },
         ]}
       />
-    </section>
+    </details>
   );
 }

@@ -78,7 +78,7 @@ export default async function DashboardPage() {
         <div className="surface overflow-hidden">
           <div className="flex flex-col gap-6 px-6 py-6 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h2 id="deadlines-heading" className="font-serif text-lg font-medium">
+              <h2 id="deadlines-heading" className="h-section">
                 Two dates that change the maths
               </h2>
               <p className="mt-1 max-w-xl text-sm text-ink-mute">
@@ -113,7 +113,7 @@ export default async function DashboardPage() {
         {/* Pipeline distribution */}
         <section aria-labelledby="pipeline-heading" className="surface p-6">
           <div className="mb-5 flex items-baseline justify-between">
-            <h2 id="pipeline-heading" className="font-serif text-lg font-medium">
+            <h2 id="pipeline-heading" className="h-section">
               Pipeline
             </h2>
             <Link href="/pipeline" className="btn-quiet">
@@ -158,7 +158,7 @@ export default async function DashboardPage() {
         {/* Follow-ups */}
         <section aria-labelledby="followups-heading" className="surface p-6">
           <div className="mb-5 flex items-baseline justify-between">
-            <h2 id="followups-heading" className="font-serif text-lg font-medium">
+            <h2 id="followups-heading" className="h-section">
               Follow-ups due
             </h2>
             <Link href="/follow-ups" className="btn-quiet">
@@ -199,7 +199,7 @@ export default async function DashboardPage() {
       {/* Recent activity */}
       <section aria-labelledby="activity-heading" className="mt-6 surface p-6">
         <div className="mb-5 flex items-baseline justify-between">
-          <h2 id="activity-heading" className="font-serif text-lg font-medium">
+          <h2 id="activity-heading" className="h-section">
             Recent activity
           </h2>
           <Link href="/activity" className="btn-quiet">

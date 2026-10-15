@@ -45,7 +45,7 @@ export function DocumentUploader({ clientId }: { clientId: string }) {
             type="file"
             required
             accept="application/pdf,image/png,image/jpeg,image/webp,image/heic"
-            className="field file:mr-3 file:rounded-full file:border-0 file:bg-ink file:px-3 file:py-1 file:text-xs file:font-semibold file:text-cream"
+            className="field cursor-pointer py-2 text-sm file:mr-3 file:cursor-pointer file:rounded-full file:border-0 file:bg-ink file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-cream hover:file:bg-pink-deep"
           />
         </div>
 
