@@ -2,12 +2,11 @@ import Link from 'next/link';
 import type { Metadata } from 'next';
 import { prisma } from '@/lib/prisma';
 import { PageHeader } from '@/components/ui/page-header';
-import { CountryChip, StatusChip } from '@/components/ui/chips';
+import { StatusChip } from '@/components/ui/chips';
 import { EmptyState } from '@/components/ui/empty-state';
 import { PRE_FILING_STATUSES } from '@/lib/pipeline';
 import { FEE_INCREASE_DATE, INVESTMENT_INCREASE_DATE, daysUntil, formatDate } from '@/lib/dates';
 import { formatCents } from '@/lib/money';
-import { isRetrogressionCountry } from '@/lib/labels';
 
 export const metadata: Metadata = { title: 'Deadlines' };
 export const dynamic = 'force-dynamic';
@@ -94,11 +93,8 @@ export default async function DeadlinesPage() {
                     <td>
                       <StatusChip status={client.status} />
                     </td>
-                    <td className="text-sm">
-                      <CountryChip
-                        country={client.countryOfBirth}
-                        flagged={isRetrogressionCountry(client.countryOfBirth)}
-                      />
+                    <td className="whitespace-nowrap text-sm text-ink-soft">
+                      {client.countryOfBirth ?? '—'}
                     </td>
                     <td className="text-sm text-ink-soft">{client.project?.name ?? '—'}</td>
                     <td className="whitespace-nowrap text-sm text-ink-soft">{formatDate(client.dateFunded)}</td>

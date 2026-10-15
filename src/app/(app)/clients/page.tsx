@@ -3,12 +3,12 @@ import type { Metadata } from 'next';
 import { getFilterOptions, listClients, PAGE_SIZE } from '@/lib/queries/clients';
 import { PageHeader } from '@/components/ui/page-header';
 import { ClientFilterBar } from '@/components/clients/filter-bar';
-import { CountryChip, SourceChip, StatusChip } from '@/components/ui/chips';
+import { StatusChip } from '@/components/ui/chips';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Pagination } from '@/components/ui/pagination';
 import { formatCents } from '@/lib/money';
 import { formatDate, relativeDays, daysUntil } from '@/lib/dates';
-import { isRetrogressionCountry } from '@/lib/labels';
+import { RETROGRESSION_FILTER } from '@/lib/queries/clients';
 
 export const metadata: Metadata = { title: 'Clients' };
 export const dynamic = 'force-dynamic';
@@ -56,7 +56,10 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
         total={total}
         centres={options.centres.map((c) => ({ value: c.id, label: c.name }))}
         projects={options.projects.map((p) => ({ value: p.id, label: p.name }))}
-        countries={options.countries.map((c) => ({ value: c.name, label: `${c.name} (${c.count})` }))}
+        countries={[
+          { value: RETROGRESSION_FILTER, label: 'Retrogression countries (India, China)' },
+          ...options.countries.map((c) => ({ value: c.name, label: `${c.name} (${c.count})` })),
+        ]}
       />
 
       {rows.length === 0 ? (
@@ -108,19 +111,17 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
                       </td>
                       <td>
                         <StatusChip status={client.status} />
-                        <span className="mt-1 block">
-                          <SourceChip source={client.source} />
+                      </td>
+                      <td className="whitespace-nowrap text-sm text-ink-soft">
+                        {client.countryOfBirth ?? '—'}
+                      </td>
+                      <td className="max-w-[14rem] text-sm">
+                        <span className="block truncate text-ink-soft" title={client.project?.name ?? undefined}>
+                          {client.project?.name ?? '—'}
                         </span>
-                      </td>
-                      <td className="text-sm">
-                        <CountryChip
-                          country={client.countryOfBirth}
-                          flagged={isRetrogressionCountry(client.countryOfBirth)}
-                        />
-                      </td>
-                      <td className="text-sm">
-                        <span className="block text-ink-soft">{client.project?.name ?? '—'}</span>
-                        <span className="block text-xs text-ink-mute">{client.regionalCentre?.name ?? '—'}</span>
+                        <span className="block truncate text-xs text-ink-mute">
+                          {client.regionalCentre?.name ?? '—'}
+                        </span>
                       </td>
                       <td className="text-right text-sm tabular">
                         <span className="block font-medium">{formatCents(commissionTotal || null)}</span>

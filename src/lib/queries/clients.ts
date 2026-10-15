@@ -2,6 +2,10 @@ import 'server-only';
 import type { ClientStatus, LeadSource, Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { ACTIVE_STATUSES } from '@/lib/pipeline';
+import { RETROGRESSION_COUNTRIES } from '@/lib/labels';
+
+/** Sentinel for the country filter: every chargeability-affected country at once. */
+export const RETROGRESSION_FILTER = '__retrogression__';
 
 export const PAGE_SIZE = 25;
 
@@ -55,7 +59,11 @@ export function buildClientWhere(filters: ClientFilters): Prisma.ClientWhereInpu
   if (filters.source) and.push({ source: filters.source as LeadSource });
   if (filters.centre) and.push({ regionalCentreId: filters.centre });
   if (filters.project) and.push({ projectId: filters.project });
-  if (filters.country) and.push({ countryOfBirth: filters.country });
+  if (filters.country === RETROGRESSION_FILTER) {
+    and.push({ countryOfBirth: { in: [...RETROGRESSION_COUNTRIES] } });
+  } else if (filters.country) {
+    and.push({ countryOfBirth: filters.country });
+  }
 
   if (and.length) where.AND = and;
   return where;
