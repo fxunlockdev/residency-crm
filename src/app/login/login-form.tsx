@@ -24,7 +24,7 @@ export function LoginForm({ next }: { next?: string }) {
           required
           autoFocus
           className="field"
-          placeholder="nick@residencyfirst.com"
+          placeholder="you@company.com"
         />
       </div>
 
