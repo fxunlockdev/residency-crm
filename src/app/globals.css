@@ -144,9 +144,44 @@
     @apply border-b border-line/70 px-4 py-3 align-middle;
   }
 
-  /* Row headers are cells, not column headings — drop the sticky header look. */
+  /* Row headers are cells, not column headings — reset the typography only.
+     Position is left alone so a pinned first column can stick. */
   .data-table tbody th {
-    @apply static z-auto bg-transparent text-sm normal-case tracking-normal text-ink backdrop-blur-none;
+    @apply text-sm font-normal normal-case tracking-normal text-ink;
+  }
+
+  /* The pinned first column.
+     These live in the component layer rather than as utilities because
+     `.data-table thead th` already sets position and z-index, and a plain
+     utility loses the specificity race against it. */
+  .data-table .col-pinned {
+    position: sticky;
+    left: 0;
+  }
+
+  .data-table thead th.col-pinned {
+    z-index: 30;
+  }
+
+  .data-table tbody th.col-pinned {
+    z-index: 20;
+    background-color: theme('colors.cream.warm');
+  }
+
+  /* Keep the row hover continuous across the frozen column. */
+  .data-table tbody tr:hover th.col-pinned {
+    background-color: theme('colors.pink.wash');
+  }
+
+  /* A hairline that marks where the frozen column ends. */
+  .data-table .col-pinned::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 0;
+    height: 100%;
+    width: 1px;
+    background: theme('colors.line.strong');
   }
 
   .data-table tbody tr {

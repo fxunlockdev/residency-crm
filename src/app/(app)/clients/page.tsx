@@ -1,14 +1,14 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
-import { getFilterOptions, listClients, PAGE_SIZE } from '@/lib/queries/clients';
+import { getFilterOptions, listClients, PAGE_SIZE, RETROGRESSION_FILTER } from '@/lib/queries/clients';
+import { getTableLayout } from '@/lib/queries/table-prefs';
+import { getCurrentUser } from '@/lib/auth';
 import { PageHeader } from '@/components/ui/page-header';
 import { ClientFilterBar } from '@/components/clients/filter-bar';
-import { StatusChip } from '@/components/ui/chips';
+import { ColumnPicker } from '@/components/clients/column-picker';
+import { ClientsTable, type ClientRow } from '@/components/clients/clients-table';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Pagination } from '@/components/ui/pagination';
-import { formatCents } from '@/lib/money';
-import { formatDate, relativeDays, daysUntil } from '@/lib/dates';
-import { RETROGRESSION_FILTER } from '@/lib/queries/clients';
 
 export const metadata: Metadata = { title: 'Clients' };
 export const dynamic = 'force-dynamic';
@@ -34,9 +34,11 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
     page: Number(one(params, 'page') ?? '1') || 1,
   };
 
-  const [{ rows, total, page, pageCount }, options] = await Promise.all([
+  const user = await getCurrentUser();
+  const [{ rows, total, page, pageCount }, options, layout] = await Promise.all([
     listClients(filters),
     getFilterOptions(),
+    getTableLayout(user?.id),
   ]);
 
   return (
@@ -46,9 +48,12 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
         title="Every prospect and investor"
         description="One record per applicant. Lost records stay searchable but drop out of the active list."
         actions={
-          <Link href="/clients/new" className="btn-accent">
-            New client
-          </Link>
+          <>
+            <ColumnPicker columns={layout.columns} />
+            <Link href="/clients/new" className="btn-accent">
+              New client
+            </Link>
+          </>
         }
       />
 
@@ -73,84 +78,7 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
           }
         />
       ) : (
-        <div className="surface overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="data-table">
-              <caption className="sr-only">Clients matching the current filters</caption>
-              <thead>
-                <tr>
-                  <th scope="col">Client</th>
-                  <th scope="col">Stage</th>
-                  <th scope="col">Country of birth</th>
-                  <th scope="col">Project</th>
-                  <th scope="col" className="text-right">Commission</th>
-                  <th scope="col">Filed</th>
-                  <th scope="col">Follow-up</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((client) => {
-                  const commissionTotal = client.commissions.reduce((sum, c) => sum + c.amountCents, 0);
-                  const outstanding = client.commissions
-                    .filter((c) => c.status !== 'PAID')
-                    .reduce((sum, c) => sum + c.amountCents, 0);
-                  const overdueFollowUp = (daysUntil(client.followUpDate) ?? 1) <= 0;
-
-                  return (
-                    <tr key={client.id}>
-                      <th scope="row" className="text-left font-normal">
-                        <Link href={`/clients/${client.id}`} className="group block">
-                          <span className="block font-medium text-ink group-hover:text-pink-deep">
-                            {client.fullName}
-                          </span>
-                          <span className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-ink-mute">
-                            <span className="tabular">{client.reference}</span>
-                            {client.email ? <span className="truncate">{client.email}</span> : null}
-                          </span>
-                        </Link>
-                      </th>
-                      <td>
-                        <StatusChip status={client.status} />
-                      </td>
-                      <td className="whitespace-nowrap text-sm text-ink-soft">
-                        {client.countryOfBirth ?? '—'}
-                      </td>
-                      <td className="max-w-[14rem] text-sm">
-                        <span className="block truncate text-ink-soft" title={client.project?.name ?? undefined}>
-                          {client.project?.name ?? '—'}
-                        </span>
-                        <span className="block truncate text-xs text-ink-mute">
-                          {client.regionalCentre?.name ?? '—'}
-                        </span>
-                      </td>
-                      <td className="text-right text-sm tabular">
-                        <span className="block font-medium">{formatCents(commissionTotal || null)}</span>
-                        {outstanding > 0 ? (
-                          <span className="block text-xs text-stage-amber">{formatCents(outstanding)} outstanding</span>
-                        ) : commissionTotal > 0 ? (
-                          <span className="block text-xs text-stage-emerald">Settled</span>
-                        ) : null}
-                      </td>
-                      <td className="whitespace-nowrap text-sm text-ink-soft">{formatDate(client.i526eFiledDate)}</td>
-                      <td className="whitespace-nowrap text-sm">
-                        {client.followUpDate ? (
-                          <>
-                            <span className={overdueFollowUp ? 'font-medium text-pink-deep' : 'text-ink-soft'}>
-                              {formatDate(client.followUpDate)}
-                            </span>
-                            <span className="block text-xs text-ink-mute">{relativeDays(client.followUpDate)}</span>
-                          </>
-                        ) : (
-                          <span className="text-ink-mute">—</span>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
+        <ClientsTable rows={rows as ClientRow[]} columns={layout.columns} widths={layout.widths} />
       )}
 
       <Pagination
