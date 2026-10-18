@@ -96,6 +96,7 @@ export async function POST(request: NextRequest) {
 
   const input = parsed.data;
   const gclid = input.gclid?.trim() || null;
+  const adCampaignId = input.adCampaignId?.trim() || null;
   const email = normalizeEmail(input.email ?? null);
   const { phone } = normalizePhone(input.phone ?? null);
 
@@ -126,6 +127,7 @@ export async function POST(request: NextRequest) {
           // Latest attribution wins; earlier values are kept when this
           // submission carries none.
           gclid: gclid ?? existing.gclid,
+          adCampaignId: adCampaignId ?? undefined,
           utmSource: input.utmSource ?? undefined,
           utmMedium: input.utmMedium ?? undefined,
           utmCampaign: input.utmCampaign ?? undefined,
@@ -174,6 +176,7 @@ export async function POST(request: NextRequest) {
             marketingConsent: input.marketingConsent === true,
             notes,
             gclid,
+            adCampaignId,
             utmSource: input.utmSource ?? null,
             utmMedium: input.utmMedium ?? null,
             utmCampaign: input.utmCampaign ?? null,

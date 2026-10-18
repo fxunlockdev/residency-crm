@@ -37,6 +37,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       heading: 'Insight',
       items: [
         { href: '/lead-sources', label: 'Lead sources' },
+        { href: '/google-ads', label: 'Google Ads' },
         { href: '/meetings', label: 'Meetings' },
         { href: '/activity', label: 'Activity log' },
       ],

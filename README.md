@@ -81,6 +81,7 @@ A record that arrives with a GCLID is marked Google Ads automatically.
 | Path | Purpose |
 |---|---|
 | `GET /api/cron/google-ads` | Uploads queued Lead / Engaged / Funded conversions by GCLID |
+| `GET /api/cron/google-ads-spend` | Pulls per-campaign spend, clicks and impressions (re-pulls a 14-day trailing window, since Google restates recent figures) |
 | `GET /api/cron/digest` | Daily digest of follow-ups, commissions due and overdue invoices |
 | `GET /api/health` | Railway healthcheck |
 
@@ -104,6 +105,25 @@ Integration tests under `tests/integration/` talk to the database in
 `DATABASE_URL`, so point that at a throwaway Postgres rather than anything real.
 They cover the things a mock cannot prove: the atomic rate-limit counter, and the
 optimistic-locking guard that stops two advisors silently overwriting each other.
+
+## Google Ads reporting
+
+`/google-ads` puts spend next to investors won. Two things make it work:
+
+- **The join key.** A GCLID identifies a click, not a campaign, so the Google
+  Ads final URL suffix must include `campaignid={campaignid}`. The lead snippet
+  stores it, and spend joins on the numeric id rather than the campaign name,
+  which changes whenever somebody renames a campaign.
+- **Cohorting by lead month.** An EB-5 deal takes months to close, so comparing
+  this month's spend with this month's funded investors divides one month's cost
+  by another month's outcome. Every figure is grouped by the month the lead
+  arrived, and cohorts younger than the typical sales cycle are marked as still
+  maturing rather than shown as failures.
+
+Cost arrives from Google as micros and is rounded to integer cents on ingest, so
+it sits alongside every other amount. If the Ads account does not bill in USD
+the page says so, because commissions are USD and the two must not be silently
+compared.
 
 ## Concurrency
 

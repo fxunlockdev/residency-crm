@@ -9,7 +9,7 @@ import type { ConversionType } from '@prisma/client';
  * is connected, and nothing is lost in the meantime.
  */
 
-const GOOGLE_ADS_API_VERSION = 'v18';
+export const GOOGLE_ADS_API_VERSION = 'v26';
 
 /** Google rejects clicks older than 90 days, so the queue stops trying beyond that. */
 export const MAX_CLICK_AGE_DAYS = 90;
@@ -52,7 +52,7 @@ export function isAdsConfigured(): boolean {
   return getAdsConfig() !== null;
 }
 
-async function getAccessToken(config: AdsConfig): Promise<string> {
+export async function getAdsAccessToken(config: AdsConfig): Promise<string> {
   const response = await fetch('https://oauth2.googleapis.com/token', {
     method: 'POST',
     signal: AbortSignal.timeout(10_000),
@@ -124,7 +124,7 @@ export async function uploadConversions(events: PendingConversion[]): Promise<Up
 
   let accessToken: string;
   try {
-    accessToken = await getAccessToken(config);
+    accessToken = await getAdsAccessToken(config);
   } catch (error) {
     const message = error instanceof Error ? error.message : 'OAuth failed.';
     return outcomes.concat(uploadable.map((event) => ({ id: event.id, status: 'FAILED', error: message })));

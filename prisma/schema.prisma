@@ -148,13 +148,17 @@ model Client {
   referrals      Client[]   @relation("Referrals")
   referredByName String?
 
-  gclid       String?
-  utmSource   String?
-  utmMedium   String?
-  utmCampaign String?
-  keyword     String?
-  landingPage String?
-  leadDate    DateTime?
+  gclid        String?
+  /// Numeric Google Ads campaign id from the {campaignid} ValueTrack parameter.
+  /// A GCLID identifies a click, not a campaign, so this is the only reliable
+  /// join between a lead and what was spent to get it. Campaign *names* change.
+  adCampaignId String?
+  utmSource    String?
+  utmMedium    String?
+  utmCampaign  String?
+  keyword      String?
+  landingPage  String?
+  leadDate     DateTime?
 
   // Case
   status                  ClientStatus    @default(PROSPECT)
@@ -215,6 +219,8 @@ model Client {
   @@index([lastName])
   @@index([countryOfBirth])
   @@index([updatedAt])
+  @@index([adCampaignId])
+  @@index([leadDate])
 }
 
 model Meeting {
@@ -354,4 +360,41 @@ model UserTablePreference {
   updatedAt DateTime @updatedAt
 
   @@unique([userId, table])
+}
+
+/// A Google Ads campaign, as named by the Ads account.
+model AdCampaign {
+  /// Google's numeric campaign id, used as the join key.
+  id         String   @id
+  name       String
+  status     String?
+  lastSeenAt DateTime @default(now())
+
+  spend AdSpendDaily[]
+}
+
+/// One campaign's spend for one day.
+///
+/// Stored as a daily snapshot so the history survives even though the Ads API
+/// only serves a limited window, and so a re-pull is idempotent.
+model AdSpendDaily {
+  id           String     @id @default(cuid())
+  campaignId   String
+  campaign     AdCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  /// UTC midnight, matching every other date in the system.
+  date         DateTime
+  /// Google reports cost in micros; it is rounded to integer cents on ingest so
+  /// it sits alongside every other amount in the system. A day's rounding error
+  /// is at most half a cent per campaign.
+  costCents    Int
+  clicks       Int        @default(0)
+  impressions  Int        @default(0)
+  /// The Ads account's billing currency. Commissions are USD, so a mismatch
+  /// must be surfaced rather than silently compared.
+  currencyCode String     @default("USD")
+
+  fetchedAt DateTime @default(now())
+
+  @@unique([campaignId, date])
+  @@index([date])
 }

@@ -23,7 +23,17 @@
   var FORM_SELECTOR = (script && script.dataset.form) || 'form[data-rf-lead]';
   var COOKIE = 'rf_attr';
   var NINETY_DAYS = 90 * 24 * 60 * 60;
-  var TRACKED = ['gclid', 'utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'keyword'];
+  var TRACKED = [
+    'gclid',
+    // Numeric campaign id from the {campaignid} ValueTrack parameter. Campaign
+    // names get renamed; the id does not, so this is what spend joins on.
+    'campaignid',
+    'utm_source',
+    'utm_medium',
+    'utm_campaign',
+    'utm_term',
+    'keyword',
+  ];
 
   function readCookie(name) {
     var match = document.cookie.match(new RegExp('(?:^|; )' + name + '=([^;]*)'));
@@ -112,6 +122,7 @@
       marketingConsent: checked(form, ['marketingConsent', 'consent', 'optin']),
       company_website: value(form, ['company_website']),
       gclid: attr.gclid || '',
+      adCampaignId: attr.campaignid || '',
       utmSource: attr.utm_source || '',
       utmMedium: attr.utm_medium || '',
       utmCampaign: attr.utm_campaign || '',

@@ -148,6 +148,7 @@ export const leadIntakeSchema = z.object({
   message: z.string().trim().max(4000).optional(),
   marketingConsent: z.boolean().optional(),
   gclid: z.string().trim().max(200).optional(),
+  adCampaignId: z.string().trim().max(32).regex(/^\d*$/, 'Campaign id must be numeric.').optional(),
   utmSource: z.string().trim().max(120).optional(),
   utmMedium: z.string().trim().max(120).optional(),
   utmCampaign: z.string().trim().max(160).optional(),
