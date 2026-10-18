@@ -18,21 +18,31 @@ const PUBLIC_PREFIXES = [
  * sees on the request.
  */
 function buildCsp(nonce: string): string {
+  const isProduction = process.env.NODE_ENV === 'production';
+  // Next's hot-reload runtime evaluates strings, so a dev build with no
+  // 'unsafe-eval' loads no client JavaScript at all and nothing hydrates.
+  // Production has no React Refresh and keeps the strict policy.
+  const scriptSrc = isProduction
+    ? `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'`
+    : `script-src 'self' 'unsafe-eval' 'nonce-${nonce}' 'strict-dynamic'`;
+
   const bytes = [
     "default-src 'self'",
-    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'`,
+    scriptSrc,
     // Tailwind ships a stylesheet, but React still injects some inline styles.
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob:",
     "font-src 'self'",
-    "connect-src 'self'",
+    ...(isProduction ? ["connect-src 'self'"] : []),
     "object-src 'none'",
     "base-uri 'self'",
     "form-action 'self'",
     "frame-ancestors 'none'",
     "frame-src 'none'",
   ];
-  if (process.env.NODE_ENV === 'production') bytes.push('upgrade-insecure-requests');
+  if (isProduction) bytes.push('upgrade-insecure-requests');
+  // The dev server streams HMR updates over a websocket.
+  if (!isProduction) bytes.push("connect-src 'self' ws: wss:");
   return bytes.join('; ');
 }
 

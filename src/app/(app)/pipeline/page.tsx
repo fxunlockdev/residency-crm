@@ -1,71 +1,89 @@
-import type { Metadata } from 'next';
 import Link from 'next/link';
-import { prisma } from '@/lib/prisma';
+import type { Metadata } from 'next';
 import { getCurrentUser, hasRole } from '@/lib/auth';
+import { getSalesBoard } from '@/lib/queries/sales-board';
 import { PageHeader } from '@/components/ui/page-header';
-import { PipelineBoard, type BoardCard } from '@/components/pipeline/board';
+import { Metric } from '@/components/ui/metric';
+import { SalesBoard } from '@/components/sales/sales-board';
+import { AddProspect } from '@/components/sales/add-prospect';
+import { formatCents } from '@/lib/money';
 
-export const metadata: Metadata = { title: 'Pipeline board' };
+export const metadata: Metadata = { title: 'Sales pipeline' };
 export const dynamic = 'force-dynamic';
-
-/** The board renders every card at once, so it is capped; the table view is unbounded. */
-const BOARD_LIMIT = 300;
 
 export default async function PipelinePage() {
   const user = await getCurrentUser();
-  const [clients, total] = await Promise.all([
-    prisma.client.findMany({
-    take: BOARD_LIMIT,
-    orderBy: [{ followUpDate: { sort: 'asc', nulls: 'last' } }, { fullName: 'asc' }],
-    select: {
-      id: true,
-      reference: true,
-      fullName: true,
-      status: true,
-      countryOfBirth: true,
-      followUpDate: true,
-      nextAction: true,
-      project: { select: { name: true } },
-      commissions: { select: { amountCents: true } },
-    },
-    }),
-    prisma.client.count(),
-  ]);
+  const board = await getSalesBoard();
+  const canEdit = !!user && hasRole(user, 'ADVISOR');
 
-  const cards: BoardCard[] = clients.map((client) => ({
-    id: client.id,
-    reference: client.reference,
-    fullName: client.fullName,
-    status: client.status,
-    countryOfBirth: client.countryOfBirth,
-    projectName: client.project?.name ?? null,
-    commissionCents: client.commissions.reduce((sum, c) => sum + c.amountCents, 0),
-    followUpDate: client.followUpDate,
-    nextAction: client.nextAction,
-  }));
+  const won = board.cards.filter((card) => card.status === 'I526E_FILED').length;
 
   return (
     <>
       <PageHeader
-        eyebrow="Pipeline"
-        title="Every case by stage"
-        description="Drag a card to move it, or use the stage menu on the card. Moving a stage fills its date, releases any matching commission and records the change."
+        eyebrow="Sales"
+        title="What is in play"
+        description="Deals still being won, and the commission they would generate. A case leaves the board once its commission is paid — that is revenue, not pipeline."
         actions={
           <Link href="/clients" className="btn-ghost">
-            Table view
+            All clients
           </Link>
         }
       />
-      {total > BOARD_LIMIT ? (
-        <p className="mb-4 rounded-xl border border-line bg-cream-deep/50 px-4 py-3 text-sm text-ink-mute">
-          Showing {BOARD_LIMIT} of {total} clients on the board.{' '}
-          <Link href="/clients" className="link">
-            Use the table view
-          </Link>{' '}
-          to see every record.
+
+      <section aria-label="Pipeline value" className="mb-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <Metric
+          label="Pipeline commission"
+          value={formatCents(board.pipelineCommissionCents)}
+          sub={
+            board.withoutValue > 0
+              ? `${board.cards.length} open deals · ${board.withoutValue} with no value set`
+              : `across ${board.cards.length} open deal${board.cards.length === 1 ? '' : 's'}`
+          }
+          tone={board.pipelineCommissionCents > 0 ? 'accent' : 'default'}
+        />
+        <Metric
+          label="At I-526E filed"
+          value={String(won)}
+          sub="closest to paying out"
+        />
+        {board.beyondBoardCents > 0 ? (
+          <Metric
+            label="Owed beyond the board"
+            value={formatCents(board.beyondBoardCents)}
+            sub={`${board.beyondBoardCount} commission${board.beyondBoardCount === 1 ? '' : 's'} on cases past filing`}
+            href="/commissions"
+          />
+        ) : null}
+      </section>
+
+      {canEdit ? (
+        <div className="mb-6">
+          <AddProspect />
+        </div>
+      ) : null}
+
+      <SalesBoard cards={board.cards} canEdit={canEdit} />
+
+      {board.cards.length === 0 ? (
+        <p className="mt-6 max-w-xl text-sm text-ink-mute">
+          Nothing in play yet. Every migrated case has either been paid or moved past filing, so the board starts
+          empty — add a prospect above and it will fill up as you work.
         </p>
       ) : null}
-      <PipelineBoard cards={cards} canEdit={!!user && hasRole(user, 'ADVISOR')} />
+
+      {board.filedWithoutCommission > 0 ? (
+        <p className="mt-6 max-w-2xl text-sm text-ink-mute">
+          {board.filedWithoutCommission} filed case{board.filedWithoutCommission === 1 ? ' is' : 's are'} kept off the
+          board because no commission was ever recorded against{' '}
+          {board.filedWithoutCommission === 1 ? 'it' : 'them'} — a gap in the migrated data rather than live sales. They
+          are listed under{' '}
+          <Link href="/settings" className="link">
+            data quality
+          </Link>
+          .
+        </p>
+      ) : null}
     </>
   );
 }

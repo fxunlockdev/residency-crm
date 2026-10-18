@@ -93,10 +93,11 @@ model User {
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
 
-  ownedClients Client[]   @relation("ClientOwner")
-  auditLogs    AuditLog[]
-  meetings     Meeting[]
-  documents    Document[]
+  ownedClients     Client[]              @relation("ClientOwner")
+  auditLogs        AuditLog[]
+  meetings         Meeting[]
+  documents        Document[]
+  tablePreferences UserTablePreference[]
 }
 
 model RegionalCentre {
@@ -156,14 +157,17 @@ model Client {
   leadDate    DateTime?
 
   // Case
-  status                ClientStatus    @default(PROSPECT)
-  attorney              String?
-  caseWorker            String?
-  regionalCentreId      String?
-  regionalCentre        RegionalCentre? @relation(fields: [regionalCentreId], references: [id], onDelete: SetNull)
-  projectId             String?
-  project               Project?        @relation(fields: [projectId], references: [id], onDelete: SetNull)
-  investmentAmountCents Int?
+  status                  ClientStatus    @default(PROSPECT)
+  attorney                String?
+  caseWorker              String?
+  regionalCentreId        String?
+  regionalCentre          RegionalCentre? @relation(fields: [regionalCentreId], references: [id], onDelete: SetNull)
+  projectId               String?
+  project                 Project?        @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  investmentAmountCents   Int?
+  /// What we expect to earn on this deal, set when a prospect is added to the
+  /// sales board. Real Commission rows take over once they exist.
+  expectedCommissionCents Int?
 
   dateFunded          DateTime?
   i526eFiledDate      DateTime?
@@ -332,4 +336,22 @@ model ConversionEvent {
 
   @@unique([clientId, type])
   @@index([status])
+}
+
+/// Per-user table layout: which columns are shown, in what order, at what width.
+/// One row per user per table, so two people can read the same data differently.
+model UserTablePreference {
+  id      String @id @default(cuid())
+  userId  String
+  user    User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// Which table this applies to, e.g. "clients".
+  table   String
+  /// Ordered column keys.
+  columns Json
+  /// Pixel widths keyed by column, for the columns that have been resized.
+  widths  Json
+
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, table])
 }

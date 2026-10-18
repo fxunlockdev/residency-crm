@@ -37,7 +37,7 @@ export default async function DashboardPage() {
               New client
             </Link>
             <Link href="/pipeline" className="btn-ghost">
-              Pipeline board
+              Sales pipeline
             </Link>
           </>
         }
@@ -116,7 +116,7 @@ export default async function DashboardPage() {
               Pipeline
             </h2>
             <Link href="/pipeline" className="btn-quiet">
-              Board view →
+              Sales board →
             </Link>
           </div>
           <ul className="space-y-2.5">

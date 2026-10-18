@@ -98,3 +98,24 @@ export const STATUS_TONE: Record<ClientStatus, 'slate' | 'sky' | 'amber' | 'viol
   I829_APPROVED: 'emerald',
   LOST: 'rose',
 };
+
+/**
+ * The sales board is a different lens on the same pipeline: it covers only the
+ * stages where revenue is still being won, and a case drops off it once the
+ * commission has actually been paid. The full nine-stage case lifecycle stays
+ * on the client record and the clients table.
+ */
+export const SALES_STAGES: ClientStatus[] = ['PROSPECT', 'ENGAGED', 'FUNDED', 'I526E_FILED'];
+
+/** Column headings on the sales board. These name a column, not a new status. */
+export const SALES_STAGE_HEADING: Record<string, string> = {
+  PROSPECT: 'Hot prospects',
+  ENGAGED: 'Engaged',
+  FUNDED: 'Funded',
+  I526E_FILED: 'I-526E filed',
+};
+
+/** Attorney becomes a working field from Engaged onwards. */
+export function stageNeedsAttorney(status: ClientStatus): boolean {
+  return statusIndex(status) >= statusIndex('ENGAGED') && status !== 'LOST';
+}

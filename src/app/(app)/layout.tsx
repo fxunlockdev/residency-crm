@@ -16,7 +16,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       heading: 'Overview',
       items: [
         { href: '/', label: 'Dashboard' },
-        { href: '/pipeline', label: 'Pipeline board' },
+        { href: '/pipeline', label: 'Sales pipeline' },
         { href: '/clients', label: 'Clients', badge: counts.activeClients },
       ],
     },
