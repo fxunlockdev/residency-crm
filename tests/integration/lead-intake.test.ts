@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { prisma } from '@/lib/prisma';
 import { POST } from '@/app/api/leads/intake/route';
+import { isPublicReference } from '@/lib/public-reference';
 
 /**
  * The only unauthenticated, internet-facing write path in the app. Five
@@ -115,8 +116,12 @@ describe('POST /api/leads/intake — the happy path', () => {
     );
 
     expect(response.status).toBe(201);
-    // The sequential reference would leak the size of the book.
-    expect(await response.json()).toEqual({ ok: true });
+    // The visitor gets an opaque handle. The sequential reference stays in the
+    // CRM, because returning it would leak the size of the book.
+    const body = await response.json();
+    expect(body.ok).toBe(true);
+    expect(isPublicReference(body.reference)).toBe(true);
+    expect(body).not.toHaveProperty('id');
 
     const client = await prisma.client.findFirstOrThrow({ where: { email: EMAIL } });
     expect(client.fullName).toBe('Mixed Case Name');
@@ -156,6 +161,50 @@ describe('POST /api/leads/intake — the happy path', () => {
     expect(client!.marketingConsent).toBe(true); // consent only ever turns on
     expect(client!.notes).toContain('First');
     expect(client!.notes).toContain('Second');
+  });
+});
+
+describe('POST /api/leads/intake — the marketing site payload', () => {
+  const FULL = {
+    ...LEAD,
+    countryOfResidence: 'United Arab Emirates',
+    preferredContactMethod: 'WHATSAPP' as const,
+    readiness: 'WITHIN_SIX_MONTHS' as const,
+    enquiryIntent: 'personalised-cost-breakdown',
+    sourceRaw: 'eb5-green-card',
+    consultationConsent: true,
+  };
+
+  it('stores every field the website form collects', async () => {
+    await post(FULL, authed());
+    const client = await prisma.client.findFirstOrThrow({ where: { email: EMAIL } });
+    expect(client.preferredContactMethod).toBe('WHATSAPP');
+    expect(client.readiness).toBe('WITHIN_SIX_MONTHS');
+    expect(client.enquiryIntent).toBe('personalised-cost-breakdown');
+    expect(client.sourceRaw).toBe('eb5-green-card');
+    expect(client.countryOfResidence).toBe('United Arab Emirates');
+  });
+
+  it('does not turn consultation consent into a marketing subscription', async () => {
+    await post(FULL, authed());
+    const client = await prisma.client.findFirstOrThrow({ where: { email: EMAIL } });
+    // The handover is explicit about this: agreeing to be contacted about an
+    // enquiry is not an opt-in to the newsletter.
+    expect(client.consultationConsentAt).not.toBeNull();
+    expect(client.marketingConsent).toBe(false);
+  });
+
+  it('keeps the same handle when the same person enquires twice', async () => {
+    const first = await (await post(FULL, authed())).json();
+    const second = await (await post({ ...FULL, message: 'One more thing' }, authed())).json();
+    expect(second.reference).toBe(first.reference);
+    expect(await prisma.client.count({ where: { email: EMAIL } })).toBe(1);
+  });
+
+  it('rejects a contact method or timing it does not recognise', async () => {
+    expect((await post({ ...FULL, preferredContactMethod: 'Pigeon' }, authed())).status).toBe(422);
+    expect((await post({ ...FULL, readiness: 'someday' }, authed())).status).toBe(422);
+    expect(await prisma.client.count({ where: { email: EMAIL } })).toBe(0);
   });
 });
 

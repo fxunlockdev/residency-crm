@@ -160,6 +160,20 @@ model Client {
   landingPage  String?
   leadDate     DateTime?
 
+  // Public enquiry, set by the marketing site
+  /// Opaque, non-sequential handle handed back to the visitor so support can
+  /// find their enquiry. The sequential `reference` would leak how many
+  /// clients exist, so it never leaves the CRM.
+  publicReference        String?        @unique
+  preferredContactMethod ContactMethod?
+  readiness              Readiness?
+  /// What the visitor clicked to open the form, for example a personalised
+  /// cost breakdown. Distinct from `source`, which is where they came from.
+  enquiryIntent          String?
+  /// Ticked the consultation consent box. Deliberately NOT marketingConsent:
+  /// agreeing to be contacted about an enquiry is not a newsletter opt-in.
+  consultationConsentAt  DateTime?
+
   // Case
   status                  ClientStatus    @default(PROSPECT)
   attorney                String?
@@ -397,4 +411,57 @@ model AdSpendDaily {
 
   @@unique([campaignId, date])
   @@index([date])
+}
+
+enum ContactMethod {
+  EMAIL
+  PHONE
+  WHATSAPP
+}
+
+enum Readiness {
+  EXPLORING
+  WITHIN_SIX_MONTHS
+  READY_NOW
+}
+
+/// The EB-5 news and deadline list. Kept apart from Client on purpose: asking
+/// for a newsletter is not an enquiry, and the handover is explicit that one
+/// must never be treated as the other.
+model UpdateSubscription {
+  /// A subscriber picks WhatsApp, email, or both, so either contact detail may
+  /// be absent. Postgres allows repeated NULLs in a unique index, so these stay
+  /// unique among the people who actually gave them.
+  email String? @unique
+  phone String? @unique
+
+  id   String  @id @default(cuid())
+  name String?
+
+  consentWhatsapp Boolean  @default(false)
+  consentEmail    Boolean  @default(false)
+  /// When the subscriber ticked the boxes, as sent by the browser.
+  consentAt       DateTime
+  /// Which wording they agreed to, so later edits to the copy do not rewrite
+  /// what past subscribers were shown.
+  consentVersion  String
+  consentText     String
+
+  signupType String
+  sourcePath String?
+
+  /// Random secret in the unsubscribe link, so one subscriber cannot guess
+  /// another's link and opt them out.
+  unsubscribeToken String    @unique
+  unsubscribedAt   DateTime?
+
+  /// Outcome of the push to MailerLite. This table is the durable record, so a
+  /// failed sync is recorded rather than lost and can be retried.
+  mailerliteSyncedAt DateTime?
+  mailerliteError    String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([createdAt])
 }

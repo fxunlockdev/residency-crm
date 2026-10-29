@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { ACTIVE_STATUSES, PRE_FILING_STATUSES } from '@/lib/pipeline';
 import { FEE_INCREASE_DATE, daysUntil, formatDate, todayUtc } from '@/lib/dates';
 import { formatCents } from '@/lib/money';
+import { sendEmail, type SendResult } from '@/lib/email';
 
 export type Digest = {
   date: string;
@@ -87,37 +88,9 @@ export function renderDigestText(digest: Digest): string {
   return lines.join('\n');
 }
 
-export async function sendDigestEmail(digest: Digest): Promise<{ sent: boolean; reason?: string }> {
-  try {
-    return await deliver(digest);
-  } catch (error) {
-    const reason = error instanceof Error ? error.message : 'Unknown error sending the digest.';
-    return { sent: false, reason };
-  }
-}
-
-async function deliver(digest: Digest): Promise<{ sent: boolean; reason?: string }> {
-  const apiKey = process.env.RESEND_API_KEY;
-  const to = process.env.ALERT_EMAIL_TO;
-  const from = process.env.ALERT_EMAIL_FROM ?? 'crm@residencyfirst.com';
-
-  if (!apiKey || !to) return { sent: false, reason: 'RESEND_API_KEY or ALERT_EMAIL_TO is not set.' };
-
-  const response = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    // Node has no default timeout: a hung provider would hold the request open.
-    signal: AbortSignal.timeout(10_000),
-    headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      from,
-      to: to.split(',').map((address) => address.trim()),
-      subject: `EB-5 tracker — ${digest.followUps.length} follow-ups, ${digest.commissionsDue.length} to invoice`,
-      text: renderDigestText(digest),
-    }),
+export async function sendDigestEmail(digest: Digest): Promise<SendResult> {
+  return sendEmail({
+    subject: `EB-5 tracker: ${digest.followUps.length} follow-ups, ${digest.commissionsDue.length} to invoice`,
+    text: renderDigestText(digest),
   });
-
-  if (!response.ok) {
-    return { sent: false, reason: `Resend returned ${response.status}.` };
-  }
-  return { sent: true };
 }

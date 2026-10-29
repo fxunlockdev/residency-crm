@@ -7,6 +7,9 @@ import { normalizeCountry, normalizeEmail, normalizePhone, toTitleCase } from '@
 import { pruneRateLimits, rateLimitSafe } from '@/lib/rate-limit';
 import { clientIpFrom, safeEqual } from '@/lib/client-ip';
 import { Prisma } from '@prisma/client';
+import { newPublicReference } from '@/lib/public-reference';
+import { sendLeadNotification } from '@/lib/lead-notification';
+import { afterResponse } from '@/lib/after-response';
 
 export const dynamic = 'force-dynamic';
 
@@ -115,11 +118,15 @@ export async function POST(request: NextRequest) {
     ? await prisma.client.findFirst({
         where: { email },
         orderBy: { createdAt: 'desc' },
-        select: { id: true, status: true, gclid: true, notes: true },
+        select: { id: true, status: true, gclid: true, notes: true, publicReference: true },
       })
     : null;
 
   if (existing) {
+    // Rows that predate public references, and every CRM-created client, have
+    // none. Mint one now so a returning visitor still gets a handle back.
+    const publicReference = existing.publicReference ?? newPublicReference();
+
     await prisma.$transaction(async (tx) => {
       await tx.client.update({
         where: { id: existing.id },
@@ -134,8 +141,13 @@ export async function POST(request: NextRequest) {
           keyword: input.keyword ?? undefined,
           landingPage: input.landingPage ?? undefined,
           phone: phone ?? undefined,
+          publicReference,
+          preferredContactMethod: input.preferredContactMethod ?? undefined,
+          readiness: input.readiness ?? undefined,
+          enquiryIntent: input.enquiryIntent ?? undefined,
           // Consent is only ever turned on by an explicit tick, never off.
           ...(input.marketingConsent === true ? { marketingConsent: true } : {}),
+          ...(input.consultationConsent === true ? { consultationConsentAt: new Date() } : {}),
           notes: notes ? [existing.notes, notes].filter(Boolean).join('\n\n---\n\n') : undefined,
           version: { increment: 1 },
         },
@@ -152,10 +164,26 @@ export async function POST(request: NextRequest) {
       });
     });
 
-    return NextResponse.json({ ok: true }, { status: 200, headers });
+    notify({
+      clientId: existing.id,
+      publicReference,
+      repeat: true,
+      fullName: toTitleCase(input.fullName),
+      email,
+      phone,
+      countryOfResidence: normalizeCountry(input.countryOfResidence ?? null),
+      preferredContactMethod: input.preferredContactMethod ?? null,
+      readiness: input.readiness ?? null,
+      enquiryIntent: input.enquiryIntent ?? null,
+      source,
+      landingPage: input.landingPage ?? null,
+      message: input.message ?? null,
+    });
+
+    return NextResponse.json({ ok: true, reference: publicReference }, { status: 200, headers });
   }
 
-  let client: { id: string; reference: string; fullName: string } | null = null;
+  let client: { id: string; reference: string; fullName: string; publicReference: string | null } | null = null;
   for (let attempt = 0; attempt < 5 && !client; attempt += 1) {
     try {
       // The client and its conversion event are written together: a failure
@@ -165,15 +193,20 @@ export async function POST(request: NextRequest) {
         const created = await tx.client.create({
           data: {
             reference: await nextReference(),
+            publicReference: newPublicReference(),
             fullName: toTitleCase(input.fullName),
             email,
             phone,
             countryOfResidence: normalizeCountry(input.countryOfResidence ?? null),
             countryOfBirth: normalizeCountry(input.countryOfBirth ?? null),
             source,
-            sourceRaw: input.utmSource ?? 'website-form',
+            sourceRaw: input.sourceRaw ?? input.utmSource ?? 'website-form',
             status: 'PROSPECT',
             marketingConsent: input.marketingConsent === true,
+            consultationConsentAt: input.consultationConsent === true ? new Date() : null,
+            preferredContactMethod: input.preferredContactMethod ?? null,
+            readiness: input.readiness ?? null,
+            enquiryIntent: input.enquiryIntent ?? null,
             notes,
             gclid,
             adCampaignId,
@@ -184,7 +217,7 @@ export async function POST(request: NextRequest) {
             landingPage: input.landingPage ?? null,
             leadDate: new Date(),
           },
-          select: { id: true, reference: true, fullName: true },
+          select: { id: true, reference: true, fullName: true, publicReference: true },
         });
 
         // The Lead conversion is queued only when a click id exists.
@@ -219,6 +252,39 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Could not record the enquiry.' }, { status: 500, headers });
   }
 
-  // The reference is sequential, so returning it would leak the size of the book.
-  return NextResponse.json({ ok: true }, { status: 201, headers });
+  notify({
+    clientId: client.id,
+    // Set on create, so it is never null here. The fallback only satisfies the
+    // type, since `select` cannot express that.
+    publicReference: client.publicReference ?? '',
+    repeat: false,
+    fullName: client.fullName,
+    email,
+    phone,
+    countryOfResidence: normalizeCountry(input.countryOfResidence ?? null),
+    preferredContactMethod: input.preferredContactMethod ?? null,
+    readiness: input.readiness ?? null,
+    enquiryIntent: input.enquiryIntent ?? null,
+    source,
+    landingPage: input.landingPage ?? null,
+    message: input.message ?? null,
+  });
+
+  // `reference` is sequential, so it never leaves the CRM. `publicReference`
+  // is random and carries no information about how many clients exist.
+  return NextResponse.json({ ok: true, reference: client.publicReference }, { status: 201, headers });
+}
+
+/**
+ * Send the alert once the response is on its way. An enquiry is already
+ * durable by this point, so a slow or broken mail provider must not keep the
+ * visitor waiting or turn their successful submission into an error.
+ */
+function notify(lead: Parameters<typeof sendLeadNotification>[0]) {
+  afterResponse(async () => {
+    const result = await sendLeadNotification(lead);
+    if (!result.sent && !result.skipped) {
+      console.error(`Lead notification not sent for ${lead.publicReference}: ${result.reason}`);
+    }
+  });
 }

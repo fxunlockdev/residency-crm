@@ -154,7 +154,45 @@ export const leadIntakeSchema = z.object({
   utmCampaign: z.string().trim().max(160).optional(),
   keyword: z.string().trim().max(160).optional(),
   landingPage: z.string().trim().max(600).optional(),
+
+  // Sent by the marketing site. Canonical casing: the website adapter
+  // translates the form's own wording before it gets here.
+  sourceRaw: z.string().trim().max(160).optional(),
+  preferredContactMethod: z.enum(['EMAIL', 'PHONE', 'WHATSAPP']).optional(),
+  readiness: z.enum(['EXPLORING', 'WITHIN_SIX_MONTHS', 'READY_NOW']).optional(),
+  enquiryIntent: z.string().trim().max(160).optional(),
+  /// Agreed to be contacted about this enquiry. Never a marketing opt-in.
+  consultationConsent: z.boolean().optional(),
 });
+
+/**
+ * The EB-5 deadline updates list. A subscriber picks WhatsApp, email or both,
+ * and must supply the contact detail for every channel they pick.
+ */
+export const updateSubscriptionSchema = z
+  .object({
+    name: z.string().trim().max(160).optional(),
+    email: z.string().trim().toLowerCase().email().optional(),
+    phone: z.string().trim().max(40).optional(),
+    consentWhatsapp: z.boolean(),
+    consentEmail: z.boolean(),
+    consentVersion: z.string().trim().min(1).max(80),
+    consentText: z.string().trim().min(1).max(2000),
+    signupType: z.string().trim().min(1).max(80),
+    sourcePath: z.string().trim().max(600).optional(),
+  })
+  .refine((value) => value.consentWhatsapp || value.consentEmail, {
+    message: 'Pick at least one channel.',
+    path: ['consentEmail'],
+  })
+  .refine((value) => !value.consentEmail || Boolean(value.email), {
+    message: 'An email address is required for the email channel.',
+    path: ['email'],
+  })
+  .refine((value) => !value.consentWhatsapp || Boolean(value.phone), {
+    message: 'A phone number is required for the WhatsApp channel.',
+    path: ['phone'],
+  });
 
 /** Collapse a ZodError into { field: message } for rendering next to inputs. */
 export function fieldErrors(error: z.ZodError): Record<string, string> {

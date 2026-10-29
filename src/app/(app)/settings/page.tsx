@@ -19,16 +19,21 @@ export const dynamic = 'force-dynamic';
 export default async function SettingsPage() {
   const actor = await requireRole('ADMIN');
 
-  const [users, centres, projects, quality, conversionCounts] = await Promise.all([
-    prisma.user.findMany({ orderBy: [{ isActive: 'desc' }, { name: 'asc' }] }),
-    prisma.regionalCentre.findMany({ orderBy: { name: 'asc' }, include: { _count: { select: { clients: true } } } }),
-    prisma.project.findMany({
-      orderBy: { name: 'asc' },
-      include: { regionalCentre: { select: { name: true } }, _count: { select: { clients: true } } },
-    }),
-    getDataQuality(),
-    prisma.conversionEvent.groupBy({ by: ['status'], _count: { _all: true } }),
-  ]);
+  const [users, centres, projects, quality, conversionCounts, subscriberTotal, subscriberFailed] =
+    await Promise.all([
+      prisma.user.findMany({ orderBy: [{ isActive: 'desc' }, { name: 'asc' }] }),
+      prisma.regionalCentre.findMany({ orderBy: { name: 'asc' }, include: { _count: { select: { clients: true } } } }),
+      prisma.project.findMany({
+        orderBy: { name: 'asc' },
+        include: { regionalCentre: { select: { name: true } }, _count: { select: { clients: true } } },
+      }),
+      getDataQuality(),
+      prisma.conversionEvent.groupBy({ by: ['status'], _count: { _all: true } }),
+      prisma.updateSubscription.count({ where: { unsubscribedAt: null } }),
+      prisma.updateSubscription.count({ where: { unsubscribedAt: null, mailerliteError: { not: null } } }),
+    ]);
+
+  const subscriberCounts = { total: subscriberTotal, failed: subscriberFailed };
 
   const appUrl = process.env.APP_URL ?? 'https://crm.residencyfirst.com';
   const adsReady = isAdsConfigured();
@@ -183,12 +188,27 @@ export default async function SettingsPage() {
                 .join(' · ')}
             />
             <IntegrationRow
-              name="Email digests"
-              connected={!!process.env.RESEND_API_KEY}
+              name="Email, MailerSend"
+              connected={!!process.env.MAILERSEND_API_TOKEN}
               detail={
-                process.env.RESEND_API_KEY
-                  ? 'A daily digest of follow-ups and commissions can be sent.'
-                  : 'Add RESEND_API_KEY and ALERT_EMAIL_TO to send the daily digest.'
+                process.env.MAILERSEND_API_TOKEN
+                  ? 'Enquiry alerts and the daily digest can be sent.'
+                  : 'Add MAILERSEND_API_TOKEN and ALERT_EMAIL_TO to send enquiry alerts and the daily digest.'
+              }
+            />
+            <IntegrationRow
+              name="Updates list, MailerLite"
+              connected={!!process.env.MAILERLITE_API_KEY}
+              detail={
+                process.env.MAILERLITE_API_KEY
+                  ? 'Deadline-updates signups are pushed to MailerLite as well as stored here.'
+                  : 'Add MAILERLITE_API_KEY to push signups to MailerLite. They are stored here either way.'
+              }
+              extra={
+                subscriberCounts.total > 0
+                  ? `${subscriberCounts.total} subscriber${subscriberCounts.total === 1 ? '' : 's'}` +
+                    (subscriberCounts.failed > 0 ? ` · ${subscriberCounts.failed} not synced` : '')
+                  : undefined
               }
             />
             <IntegrationRow
