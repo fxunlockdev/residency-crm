@@ -5,6 +5,10 @@ import { SESSION_COOKIE, verifySessionToken } from '@/lib/session-token';
 const PUBLIC_PREFIXES = [
   '/login',
   '/api/leads',
+  // The marketing site's updates signup. Like /api/leads it checks
+  // LEAD_INTAKE_TOKEN itself, and without this the middleware 401s it before
+  // the route ever runs.
+  '/api/updates',
   '/api/health',
   // Cron routes authenticate themselves with CRON_SECRET; without this the
   // middleware 401s the scheduler before the route ever runs.

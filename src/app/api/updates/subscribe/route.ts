@@ -154,7 +154,10 @@ export async function POST(request: NextRequest) {
         where: { id: subscription.id },
         data: {
           mailerliteSyncedAt: sync.synced ? new Date() : null,
-          mailerliteError: sync.synced ? null : (sync.reason ?? null),
+          // A skip is not a failure: MailerLite may simply not be configured,
+          // or this may be a WhatsApp-only subscriber with no email to sync.
+          // Recording those as errors would make the settings page cry wolf.
+          mailerliteError: sync.synced || sync.skipped ? null : (sync.reason ?? null),
         },
       })
       .catch((error: unknown) => {
