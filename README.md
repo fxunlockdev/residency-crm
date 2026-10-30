@@ -127,6 +127,15 @@ whether or not it matched, so it cannot be used to guess another subscriber's.
 A sent newsletter is kept as a record of what subscribers were told, and
 cannot be edited or deleted.
 
+**Where this stops scaling.** The send runs inside the request that starts it,
+about 0.6 seconds per hundred subscribers. That is seconds for a list in the
+hundreds and fine into the low thousands, but somewhere past ten thousand it
+will meet a platform request timeout. A send cut short leaves the newsletter
+claimed; an administrator can release it, and Resend's idempotency keys mean
+re-sending within 24 hours will not re-deliver the batches that got out. Past
+that size it wants a background job and a per-recipient record of who was
+reached, which is a bigger change than it is worth today.
+
 ## Mail
 
 Everything goes out through Resend.
