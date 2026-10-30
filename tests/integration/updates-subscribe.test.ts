@@ -1,6 +1,7 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { prisma } from '@/lib/prisma';
 import { POST } from '@/app/api/updates/subscribe/route';
+import { CONSENT_TEXTS } from '@/lib/validation';
 
 /**
  * The second unauthenticated write path. Consent is the thing worth protecting
@@ -86,7 +87,10 @@ describe('POST /api/updates/subscribe — the happy path', () => {
     expect(row.consentEmail).toBe(true);
     expect(row.consentWhatsapp).toBe(false);
     expect(row.consentVersion).toBe(CONSENT.consentVersion);
-    expect(row.consentText).toBe(CONSENT.consentText);
+    // Our published wording, not whatever the caller posted. A consent record
+    // built from the caller's own text would be worthless as evidence.
+    expect(row.consentText).toBe(CONSENT_TEXTS[CONSENT.consentVersion]);
+    expect(row.consentText).not.toBe(CONSENT.consentText);
     expect(row.sourcePath).toBe('/insights/');
     expect(row.unsubscribeToken).toMatch(/^[\w-]{20,}$/);
     expect(row.unsubscribedAt).toBeNull();
@@ -134,13 +138,37 @@ describe('POST /api/updates/subscribe — consent discipline', () => {
     expect(row.consentWhatsapp).toBe(true);
   });
 
-  it('opts a returning subscriber back in', async () => {
+  it('leaves someone who unsubscribed opted out, however the form is filled', async () => {
     await post(EMAIL_SIGNUP, authed());
-    await prisma.updateSubscription.update({ where: { email: EMAIL }, data: { unsubscribedAt: new Date() } });
+    const optedOut = new Date();
+    await prisma.updateSubscription.update({ where: { email: EMAIL }, data: { unsubscribedAt: optedOut } });
 
-    await post(EMAIL_SIGNUP, authed());
+    // This endpoint is unauthenticated, so a signup naming an address is not
+    // proof that its owner asked for anything. Resurrecting them silently is
+    // the one thing an unsubscribe exists to prevent.
+    const response = await post(EMAIL_SIGNUP, authed());
+    expect(response.status).toBe(200);
+
     const row = await prisma.updateSubscription.findUniqueOrThrow({ where: { email: EMAIL } });
-    expect(row.unsubscribedAt).toBeNull();
+    expect(row.unsubscribedAt?.getTime()).toBe(optedOut.getTime());
+  });
+
+  it('refuses consent wording we never published', async () => {
+    const response = await post({ ...EMAIL_SIGNUP, consentVersion: 'made-up-version' }, authed());
+    expect(response.status).toBe(422);
+    expect(await prisma.updateSubscription.count({ where: { email: EMAIL } })).toBe(0);
+  });
+
+  it('never lets one signup overwrite another subscriber\'s address', async () => {
+    // Two people, one shared WhatsApp number.
+    await post({ ...CONSENT, name: 'First', email: EMAIL, phone: '+990000900', consentEmail: true, consentWhatsapp: true }, authed());
+    await post(
+      { ...CONSENT, name: 'Second', email: 'second.probe@example.test', phone: '+990000900', consentEmail: true, consentWhatsapp: true },
+      authed(),
+    );
+
+    const row = await prisma.updateSubscription.findUniqueOrThrow({ where: { phone: '+990000900' } });
+    expect(row.email).toBe(EMAIL);
   });
 
   it('records when consent was received here, not whenever the browser claims', async () => {

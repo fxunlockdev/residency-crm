@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { randomBytes } from 'node:crypto';
 import { prisma } from '@/lib/prisma';
-import { updateSubscriptionSchema } from '@/lib/validation';
+import { CONSENT_TEXTS, updateSubscriptionSchema } from '@/lib/validation';
 import { normalizeEmail, normalizePhone } from '@/lib/normalize';
 import { pruneRateLimits, rateLimitSafe } from '@/lib/rate-limit';
 import { clientIpFrom, safeEqual } from '@/lib/client-ip';
@@ -66,27 +66,45 @@ export async function POST(request: NextRequest) {
     where: {
       OR: [...(email ? [{ email }] : []), ...(phone ? [{ phone }] : [])],
     },
-    select: { id: true, consentWhatsapp: true, consentEmail: true },
+    select: {
+      id: true,
+      email: true,
+      phone: true,
+      consentWhatsapp: true,
+      consentEmail: true,
+      unsubscribedAt: true,
+    },
   });
+
+  // Somebody who has opted out stays opted out. This form is unauthenticated,
+  // so a signup here is not proof that the person it names asked for anything,
+  // and silently resurrecting them would be the one thing an unsubscribe is
+  // supposed to prevent. The request is accepted and recorded; re-enabling is
+  // a deliberate act in the CRM.
+  if (existing?.unsubscribedAt) {
+    console.warn(`Updates signup for ${existing.id}, which has unsubscribed. Left opted out.`);
+    return NextResponse.json({ ok: true }, { status: 200 });
+  }
 
   const subscription = existing
     ? await prisma.updateSubscription.update({
         where: { id: existing.id },
         data: {
           name: input.name || undefined,
-          email: email ?? undefined,
-          phone: phone ?? undefined,
+          // Fill a blank, never replace a detail already on the row. Matching
+          // is by email OR phone, so a shared number would otherwise let one
+          // signup overwrite another person's address.
+          email: existing.email ?? email,
+          phone: existing.phone ?? phone,
           // Channels are only ever turned on here. Opting out happens through
           // the unsubscribe link, never through a signup form.
           consentWhatsapp: existing.consentWhatsapp || input.consentWhatsapp,
           consentEmail: existing.consentEmail || input.consentEmail,
           consentAt,
           consentVersion: input.consentVersion,
-          consentText: input.consentText,
+          consentText: CONSENT_TEXTS[input.consentVersion],
           signupType: input.signupType,
           sourcePath: input.sourcePath ?? undefined,
-          // Signing up again after unsubscribing opts them back in.
-          unsubscribedAt: null,
         },
         select: {
           id: true,
@@ -107,7 +125,8 @@ export async function POST(request: NextRequest) {
           consentEmail: input.consentEmail,
           consentAt,
           consentVersion: input.consentVersion,
-          consentText: input.consentText,
+          // Our copy of the wording, not the caller's.
+          consentText: CONSENT_TEXTS[input.consentVersion]!,
           signupType: input.signupType,
           sourcePath: input.sourcePath ?? null,
           unsubscribeToken: randomBytes(24).toString('base64url'),
@@ -145,15 +164,20 @@ export async function POST(request: NextRequest) {
       }),
     ]);
 
-    if (!notification.sent && !notification.skipped) {
-      console.error(`Subscription notification not sent for ${subscription.id}: ${notification.reason}`);
+    if (!notification.sent) {
+      const message = `Subscription alert not sent for ${subscription.id}: ${notification.reason}`;
+      if (notification.skipped) console.warn(message);
+      else console.error(message);
     }
 
     await prisma.updateSubscription
       .update({
         where: { id: subscription.id },
         data: {
-          mailerliteSyncedAt: sync.synced ? new Date() : null,
+          // Only ever set on success. Writing null on a later transient
+          // failure would erase a timestamp that was true, and claim the
+          // subscriber was never synced when they were.
+          ...(sync.synced ? { mailerliteSyncedAt: new Date() } : {}),
           // A skip is not a failure: MailerLite may simply not be configured,
           // or this may be a WhatsApp-only subscriber with no email to sync.
           // Recording those as errors would make the settings page cry wolf.

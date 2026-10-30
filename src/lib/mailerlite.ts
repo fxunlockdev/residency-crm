@@ -81,9 +81,10 @@ async function push(subscriber: SubscriberSync): Promise<SyncResult> {
       ...(Object.keys(fields).length > 0 ? { fields } : {}),
       ...(groups.length > 0 ? { groups } : {}),
       opted_in_at: mailerliteDate(subscriber.consentAt),
-      // Someone filling the form again after unsubscribing is asking to come
-      // back, and our own table has already recorded that.
-      resubscribe: true,
+      // Deliberately absent: `resubscribe: true` would overturn an opt-out
+      // made in MailerLite itself. Nothing an unauthenticated form receives
+      // is good enough evidence to do that.
+      resubscribe: false,
     }),
   });
 

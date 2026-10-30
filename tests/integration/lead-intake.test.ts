@@ -208,6 +208,93 @@ describe('POST /api/leads/intake — the marketing site payload', () => {
   });
 });
 
+describe('POST /api/leads/intake — a repeat enquiry must not rewrite the record', () => {
+  /**
+   * This endpoint is unauthenticated and the only thing needed to reach an
+   * existing client is their email address. If a submission could overwrite
+   * stored details, anyone who knew an investor's email could replace their
+   * phone number with their own and wait for staff to ring it.
+   */
+  const ORIGINAL = {
+    ...LEAD,
+    phone: '+971500000001',
+    countryOfResidence: 'United Arab Emirates',
+    preferredContactMethod: 'EMAIL' as const,
+    readiness: 'EXPLORING' as const,
+    consultationConsent: true,
+  };
+
+  const ATTACKER = {
+    fullName: 'intake probe',
+    email: EMAIL,
+    phone: '+440000000002',
+    countryOfResidence: 'Nigeria',
+    preferredContactMethod: 'WHATSAPP' as const,
+    readiness: 'READY_NOW' as const,
+    message: 'Please call me on my new number.',
+    consultationConsent: true,
+  };
+
+  it('keeps every detail already on the record', async () => {
+    await post(ORIGINAL, authed());
+    await post(ATTACKER, authed());
+
+    const client = await prisma.client.findFirstOrThrow({ where: { email: EMAIL } });
+    expect(client.phone).toBe('+971500000001');
+    expect(client.countryOfResidence).toBe('United Arab Emirates');
+    expect(client.preferredContactMethod).toBe('EMAIL');
+    expect(client.readiness).toBe('EXPLORING');
+  });
+
+  it('shows staff what was submitted instead, rather than hiding it', async () => {
+    await post(ORIGINAL, authed());
+    await post(ATTACKER, authed());
+
+    const client = await prisma.client.findFirstOrThrow({ where: { email: EMAIL } });
+    expect(client.notes).toContain('differ from the record');
+    expect(client.notes).toContain('+440000000002');
+    expect(client.notes).toContain('Please call me on my new number.');
+
+    const audit = await prisma.auditLog.findFirst({
+      where: { entityId: client.id, action: 'updated' },
+      orderBy: { createdAt: 'desc' },
+    });
+    expect(audit?.summary).toContain('differ from the record');
+  });
+
+  it('still fills a blank, which is the point of merging at all', async () => {
+    await post({ ...LEAD, consultationConsent: true }, authed());
+    await post({ ...LEAD, phone: '+971500000009', countryOfResidence: 'India' }, authed());
+
+    const client = await prisma.client.findFirstOrThrow({ where: { email: EMAIL } });
+    expect(client.phone).toBe('+971500000009');
+    expect(client.countryOfResidence).toBe('India');
+  });
+
+  it('does not let repeated submissions grow the notes without bound', async () => {
+    await post(ORIGINAL, authed());
+    const long = 'x'.repeat(3900);
+    for (let i = 0; i < 4; i += 1) {
+      await post({ ...LEAD, message: long }, authed());
+    }
+
+    const client = await prisma.client.findFirstOrThrow({ where: { email: EMAIL } });
+    // The edit form refuses notes longer than this, so letting the public
+    // endpoint pass it would lock staff out of saving the record.
+    expect(client.notes!.length).toBeLessThanOrEqual(8000);
+    expect(client.notes).toContain('the notes are full');
+  });
+
+  it('keeps the first consent timestamp rather than refreshing it on demand', async () => {
+    await post(ORIGINAL, authed());
+    const first = await prisma.client.findFirstOrThrow({ where: { email: EMAIL } });
+
+    await post(ATTACKER, authed());
+    const after = await prisma.client.findFirstOrThrow({ where: { email: EMAIL } });
+    expect(after.consultationConsentAt?.getTime()).toBe(first.consultationConsentAt?.getTime());
+  });
+});
+
 describe('POST /api/leads/intake — rate limiting', () => {
   it('blocks a flood from one address after the limit', async () => {
     const headers = authed({ 'x-forwarded-for': '198.51.100.77' });

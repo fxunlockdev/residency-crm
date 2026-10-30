@@ -97,9 +97,15 @@ describe('lead notification body', () => {
     expect(text).toContain('Email');
   });
 
-  it('says plainly when an enquiry is a repeat', () => {
-    expect(renderLeadNotification({ ...lead, repeat: true })).toContain('merged into their existing record');
-    expect(renderLeadNotification(lead)).toContain('A new enquiry');
+  it('says plainly when an enquiry is a repeat, and that nothing was overwritten', () => {
+    const repeat = renderLeadNotification({ ...lead, repeat: true });
+    expect(repeat).toContain('merged into their existing record');
+    expect(repeat).toContain('nothing already on file was overwritten');
+    expect(repeat).toContain('REPEAT ENQUIRY');
+
+    const fresh = renderLeadNotification(lead);
+    expect(fresh).toContain('NEW ENQUIRY');
+    expect(fresh).not.toContain('merged');
   });
 
   it('links straight to the client in the CRM', () => {

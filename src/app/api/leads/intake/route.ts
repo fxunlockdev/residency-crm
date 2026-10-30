@@ -40,6 +40,38 @@ export async function OPTIONS(request: NextRequest) {
   return new NextResponse(null, { status: 204, headers: corsHeaders(request.headers.get('origin')) });
 }
 
+/**
+ * The client edit form refuses notes longer than this, so letting the public
+ * endpoint grow the field past it would lock staff out of saving the record.
+ */
+const NOTES_LIMIT = 8000;
+
+/** One line for staff when a submission contradicts what we already hold. */
+function conflict(label: string, stored: string | null, submitted: string | null): string | null {
+  if (!submitted || !stored) return null;
+  if (stored.trim().toLowerCase() === submitted.trim().toLowerCase()) return null;
+  return `  ${label}: submitted ${submitted}, on record ${stored}`;
+}
+
+/**
+ * Append, newest last, and stop at the limit rather than truncating a record
+ * staff may be relying on. Repeated submissions cannot grow this without
+ * bound.
+ */
+function appendNote(current: string | null, addition: string): string | undefined {
+  if (!addition) return undefined;
+  if (!current) return addition.slice(0, NOTES_LIMIT);
+
+  const combined = `${current}\n\n---\n\n${addition}`;
+  if (combined.length <= NOTES_LIMIT) return combined;
+
+  // Out of room. Leave what is there and say so once, if even that fits.
+  const marker = '\n\n---\n\n[Further website enquiries not appended: the notes are full.]';
+  if (current.endsWith(marker)) return undefined;
+  if (current.length + marker.length > NOTES_LIMIT) return undefined;
+  return current + marker;
+}
+
 export async function POST(request: NextRequest) {
   const headers = corsHeaders(request.headers.get('origin'));
 
@@ -114,41 +146,94 @@ export async function POST(request: NextRequest) {
 
   // A double submit, a back-button resubmit or a second enquiry from the same
   // person should enrich the existing record, not create a duplicate one.
+  //
+  // It must not do more than that. This endpoint is unauthenticated, and the
+  // only thing a caller needs to reach an existing client is their email
+  // address. If a submission could overwrite stored details, anyone who knows
+  // an investor's email could replace their phone number with their own and
+  // wait for staff to call it. So a repeat enquiry fills blanks and appends a
+  // note; it never changes a value a person already put there.
   const existing = email
     ? await prisma.client.findFirst({
         where: { email },
         orderBy: { createdAt: 'desc' },
-        select: { id: true, status: true, gclid: true, notes: true, publicReference: true },
+        select: {
+          id: true,
+          status: true,
+          gclid: true,
+          adCampaignId: true,
+          utmSource: true,
+          utmMedium: true,
+          utmCampaign: true,
+          keyword: true,
+          landingPage: true,
+          phone: true,
+          countryOfResidence: true,
+          preferredContactMethod: true,
+          readiness: true,
+          enquiryIntent: true,
+          consultationConsentAt: true,
+          publicReference: true,
+        },
       })
     : null;
 
   if (existing) {
-    // Rows that predate public references, and every CRM-created client, have
-    // none. Mint one now so a returning visitor still gets a handle back.
+    const country = normalizeCountry(input.countryOfResidence ?? null);
+
+    // Anything the visitor sent that contradicts what we hold goes to staff as
+    // text to check, rather than silently replacing the real value.
+    const conflicts = [
+      conflict('Phone', existing.phone, phone),
+      conflict('Country', existing.countryOfResidence, country),
+      conflict('Preferred contact', existing.preferredContactMethod, input.preferredContactMethod ?? null),
+      conflict('Timeline', existing.readiness, input.readiness ?? null),
+    ].filter((line): line is string => line !== null);
+
+    const body = [
+      input.message ? `Website enquiry:\n\n${input.message}` : 'Website enquiry with no message.',
+      conflicts.length > 0
+        ? `Submitted details that differ from the record, unverified:\n${conflicts.join('\n')}`
+        : null,
+    ]
+      .filter(Boolean)
+      .join('\n\n');
+
     const publicReference = existing.publicReference ?? newPublicReference();
 
     await prisma.$transaction(async (tx) => {
+      // Re-read inside the transaction and append there. Reading notes outside
+      // it let a concurrent enquiry, or a staff edit, be overwritten.
+      const current = await tx.client.findUniqueOrThrow({
+        where: { id: existing.id },
+        select: { notes: true, publicReference: true },
+      });
+
       await tx.client.update({
         where: { id: existing.id },
         data: {
-          // Latest attribution wins; earlier values are kept when this
-          // submission carries none.
-          gclid: gclid ?? existing.gclid,
-          adCampaignId: adCampaignId ?? undefined,
-          utmSource: input.utmSource ?? undefined,
-          utmMedium: input.utmMedium ?? undefined,
-          utmCampaign: input.utmCampaign ?? undefined,
-          keyword: input.keyword ?? undefined,
-          landingPage: input.landingPage ?? undefined,
-          phone: phone ?? undefined,
-          publicReference,
-          preferredContactMethod: input.preferredContactMethod ?? undefined,
-          readiness: input.readiness ?? undefined,
-          enquiryIntent: input.enquiryIntent ?? undefined,
-          // Consent is only ever turned on by an explicit tick, never off.
+          // Blanks only. `??` on the stored value means a present value wins.
+          gclid: existing.gclid ?? gclid,
+          adCampaignId: existing.adCampaignId ?? adCampaignId,
+          utmSource: existing.utmSource ?? input.utmSource ?? null,
+          utmMedium: existing.utmMedium ?? input.utmMedium ?? null,
+          utmCampaign: existing.utmCampaign ?? input.utmCampaign ?? null,
+          keyword: existing.keyword ?? input.keyword ?? null,
+          landingPage: existing.landingPage ?? input.landingPage ?? null,
+          phone: existing.phone ?? phone,
+          countryOfResidence: existing.countryOfResidence ?? country,
+          preferredContactMethod: existing.preferredContactMethod ?? input.preferredContactMethod ?? null,
+          readiness: existing.readiness ?? input.readiness ?? null,
+          enquiryIntent: existing.enquiryIntent ?? input.enquiryIntent ?? null,
+          // Whoever asked first keeps the handle they were given.
+          publicReference: current.publicReference ?? publicReference,
+          // Consent is only ever turned on by an explicit tick, never off, and
+          // the first time it was given is the record worth keeping.
           ...(input.marketingConsent === true ? { marketingConsent: true } : {}),
-          ...(input.consultationConsent === true ? { consultationConsentAt: new Date() } : {}),
-          notes: notes ? [existing.notes, notes].filter(Boolean).join('\n\n---\n\n') : undefined,
+          ...(input.consultationConsent === true && !existing.consultationConsentAt
+            ? { consultationConsentAt: new Date() }
+            : {}),
+          notes: appendNote(current.notes, body),
           version: { increment: 1 },
         },
       });
@@ -159,19 +244,22 @@ export async function POST(request: NextRequest) {
           entityId: existing.id,
           action: 'updated',
           actorLabel: 'Website form',
-          summary: 'Repeat website enquiry merged into the existing record',
+          summary:
+            conflicts.length > 0
+              ? 'Repeat website enquiry merged, with submitted details that differ from the record'
+              : 'Repeat website enquiry merged into the existing record',
         }),
       });
     });
 
     notify({
       clientId: existing.id,
-      publicReference,
+      publicReference: existing.publicReference ?? publicReference,
       repeat: true,
       fullName: toTitleCase(input.fullName),
       email,
       phone,
-      countryOfResidence: normalizeCountry(input.countryOfResidence ?? null),
+      countryOfResidence: country,
       preferredContactMethod: input.preferredContactMethod ?? null,
       readiness: input.readiness ?? null,
       enquiryIntent: input.enquiryIntent ?? null,
@@ -180,7 +268,10 @@ export async function POST(request: NextRequest) {
       message: input.message ?? null,
     });
 
-    return NextResponse.json({ ok: true, reference: publicReference }, { status: 200, headers });
+    return NextResponse.json(
+      { ok: true, reference: existing.publicReference ?? publicReference },
+      { status: 200, headers },
+    );
   }
 
   let client: { id: string; reference: string; fullName: string; publicReference: string | null } | null = null;
@@ -283,8 +374,12 @@ export async function POST(request: NextRequest) {
 function notify(lead: Parameters<typeof sendLeadNotification>[0]) {
   afterResponse(async () => {
     const result = await sendLeadNotification(lead);
-    if (!result.sent && !result.skipped) {
-      console.error(`Lead notification not sent for ${lead.publicReference}: ${result.reason}`);
+    if (!result.sent) {
+      const message = `Enquiry alert not sent for ${lead.publicReference}: ${result.reason}`;
+      // A skip means mail is switched off, which is a configuration problem
+      // worth surfacing: the enquiry is stored, but nobody is told about it.
+      if (result.skipped) console.warn(message);
+      else console.error(message);
     }
   });
 }

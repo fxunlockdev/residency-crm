@@ -5,7 +5,9 @@ export type SendResult = { sent: boolean; skipped?: boolean; reason?: string };
 
 export type Message = {
   subject: string;
+  /** Always sent. Some clients will not render HTML, and some people prefer not to. */
   text: string;
+  html?: string;
   /** Comma-separated. Defaults to ALERT_EMAIL_TO. */
   to?: string;
   replyTo?: string;
@@ -68,6 +70,7 @@ async function deliver(message: Message): Promise<SendResult> {
       to: recipients,
       subject: message.subject,
       text: message.text,
+      ...(message.html ? { html: message.html } : {}),
       ...(message.replyTo ? { reply_to: { email: message.replyTo } } : {}),
     }),
   });

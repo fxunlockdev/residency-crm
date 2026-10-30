@@ -166,6 +166,17 @@ export const leadIntakeSchema = z.object({
 });
 
 /**
+ * The wording a subscriber agreed to, held here rather than taken from the
+ * browser. The form posts its own copy, but anyone can post anything, so a
+ * consent record built from the caller's text is worth nothing as evidence.
+ * The version is matched against this table and our copy is what gets stored.
+ */
+export const CONSENT_TEXTS: Record<string, string> = {
+  'eb5-updates-2026-10-28':
+    'Receive EB-5 news and deadline updates from Residency First Advisers on selected channels. Unsubscribe at any time.',
+};
+
+/**
  * The EB-5 deadline updates list. A subscriber picks WhatsApp, email or both,
  * and must supply the contact detail for every channel they pick.
  */
@@ -176,7 +187,14 @@ export const updateSubscriptionSchema = z
     phone: z.string().trim().max(40).optional(),
     consentWhatsapp: z.boolean(),
     consentEmail: z.boolean(),
-    consentVersion: z.string().trim().min(1).max(80),
+    // Only wording we published is accepted. An unknown version means the
+    // page is stale or the caller made it up, and either way we cannot say
+    // what the person agreed to.
+    consentVersion: z.string().trim().refine((value) => value in CONSENT_TEXTS, {
+      message: 'Unknown consent version.',
+    }),
+    // Accepted so the shape matches what the page sends, then discarded in
+    // favour of our own copy.
     consentText: z.string().trim().min(1).max(2000),
     signupType: z.string().trim().min(1).max(80),
     sourcePath: z.string().trim().max(600).optional(),

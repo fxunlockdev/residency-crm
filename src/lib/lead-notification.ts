@@ -1,5 +1,6 @@
 import 'server-only';
 import { sendEmail, type SendResult } from '@/lib/email';
+import { renderEmailHtml, renderEmailText, type Email } from '@/lib/email-template';
 
 export type LeadNotification = {
   fullName: string;
@@ -30,6 +31,25 @@ const METHOD_LABELS: Record<string, string> = {
   WHATSAPP: 'WhatsApp',
 };
 
+const SOURCE_LABELS: Record<string, string> = {
+  GOOGLE_ADS: 'Google Ads',
+  REFERRAL: 'Referral',
+  WEBSITE: 'Website',
+  EVENT: 'Event',
+  PARTNER: 'Partner',
+  LINKEDIN: 'LinkedIn',
+  OTHER: 'Other',
+};
+
+/**
+ * The popups send a slug for what the reader clicked. Nobody reading an alert
+ * at seven in the morning should have to decode `personalised-cost-breakdown`.
+ */
+function humanise(value: string): string {
+  const words = value.replace(/[-_]+/g, ' ').trim();
+  return words ? words.charAt(0).toUpperCase() + words.slice(1) : value;
+}
+
 /**
  * Where enquiry alerts land. Separate from ALERT_EMAIL_TO so the daily ops
  * digest and inbound enquiries can go to different inboxes, which is what the
@@ -39,53 +59,59 @@ function recipient(): string | undefined {
   return process.env.LEAD_NOTIFY_TO?.trim() || process.env.ALERT_EMAIL_TO?.trim() || undefined;
 }
 
-export function renderLeadNotification(lead: LeadNotification): string {
+/** The content, independent of how it is rendered. */
+export function leadEmail(lead: LeadNotification): Email {
   const appUrl = process.env.APP_URL?.replace(/\/+$/, '') ?? '';
-  const rows: Array<[string, string | null]> = [
-    ['Name', lead.fullName],
-    ['Email', lead.email],
-    ['Phone', lead.phone],
-    ['Country', lead.countryOfResidence],
-    ['Prefers', lead.preferredContactMethod ? METHOD_LABELS[lead.preferredContactMethod] ?? lead.preferredContactMethod : null],
-    ['Timeline', lead.readiness ? READINESS_LABELS[lead.readiness] ?? lead.readiness : null],
-    ['Asked for', lead.enquiryIntent],
-    ['Source', lead.source],
-    ['Page', lead.landingPage],
-    ['Reference', lead.publicReference],
-  ];
 
-  const lines: string[] = [
-    lead.repeat
-      ? 'A returning visitor sent another enquiry. It has been merged into their existing record.'
-      : 'A new enquiry came in from the website.',
-    '',
-  ];
+  // Name is the heading; repeating it as a row is just noise.
+  const rows = [
+    { label: 'Email', value: lead.email },
+    { label: 'Phone', value: lead.phone },
+    { label: 'Country', value: lead.countryOfResidence },
+    {
+      label: 'Prefers',
+      value: lead.preferredContactMethod
+        ? (METHOD_LABELS[lead.preferredContactMethod] ?? lead.preferredContactMethod)
+        : null,
+    },
+    { label: 'Timeline', value: lead.readiness ? (READINESS_LABELS[lead.readiness] ?? lead.readiness) : null },
+    { label: 'Asked for', value: lead.enquiryIntent ? humanise(lead.enquiryIntent) : null },
+    { label: 'Source', value: lead.source ? (SOURCE_LABELS[lead.source] ?? humanise(lead.source)) : null },
+    { label: 'Page', value: lead.landingPage },
+  ].filter((row): row is { label: string; value: string } => Boolean(row.value));
 
-  const width = Math.max(...rows.map(([label]) => label.length));
-  for (const [label, value] of rows) {
-    if (value) lines.push(`${label.padEnd(width)}  ${value}`);
-  }
+  return {
+    eyebrow: lead.repeat ? 'Repeat enquiry' : 'New enquiry',
+    heading: lead.fullName,
+    intro: lead.repeat
+      ? 'A returning visitor sent another enquiry. It has been merged into their existing record, and nothing already on file was overwritten.'
+      : 'Someone asked for a consultation through the website.',
+    rows,
+    ...(lead.message ? { quote: { label: 'In their words', text: lead.message } } : {}),
+    reference: lead.publicReference,
+    ...(appUrl ? { cta: { label: 'Open in the CRM', href: `${appUrl}/clients/${lead.clientId}` } } : {}),
+    footnote: 'Replying to this email replies to the enquirer.',
+  };
+}
 
-  if (lead.message) {
-    lines.push('', 'Their message:', '', lead.message);
-  }
-
-  if (appUrl) {
-    lines.push('', `Open in the CRM: ${appUrl}/clients/${lead.clientId}`);
-  }
-
-  return lines.join('\n');
+export function renderLeadNotification(lead: LeadNotification): string {
+  return renderEmailText(leadEmail(lead));
 }
 
 export async function sendLeadNotification(lead: LeadNotification): Promise<SendResult> {
   const prefix = lead.repeat ? 'Repeat enquiry' : 'New enquiry';
   const where = lead.enquiryIntent ? ` (${lead.enquiryIntent})` : '';
+  const email = leadEmail(lead);
+
   return sendEmail({
     to: recipient(),
     // Replying goes straight back to the person who enquired.
     replyTo: lead.email ?? undefined,
-    subject: `${prefix}: ${lead.fullName}${where}`,
-    text: renderLeadNotification(lead),
+    // A newline here would be a header-injection attempt, and intent is
+    // visitor-supplied on the cost popups.
+    subject: `${prefix}: ${lead.fullName}${where}`.replace(/[\r\n]+/g, ' ').slice(0, 200),
+    text: renderEmailText(email),
+    html: renderEmailHtml(email),
   });
 }
 
@@ -98,24 +124,27 @@ export type SubscriptionNotification = {
 };
 
 export async function sendSubscriptionNotification(sub: SubscriptionNotification): Promise<SendResult> {
-  const channels = [sub.consentEmail ? 'email' : null, sub.consentWhatsapp ? 'WhatsApp' : null]
+  const channels = [sub.consentEmail ? 'Email' : null, sub.consentWhatsapp ? 'WhatsApp' : null]
     .filter(Boolean)
     .join(' and ');
 
-  const lines = [
-    'Someone joined the EB-5 deadline updates list.',
-    '',
-    `Name      ${sub.name ?? 'not given'}`,
-    `Email     ${sub.email}`,
-    `Channels  ${channels || 'none selected'}`,
-    `Page      ${sub.sourcePath ?? 'not recorded'}`,
-    '',
-    'This is a news list signup, not a consultation enquiry.',
-  ];
+  const email: Email = {
+    eyebrow: 'Updates list',
+    heading: 'A new subscriber',
+    intro: 'Someone joined the EB-5 deadline updates list. This is a news signup, not a consultation enquiry, and no client record was created.',
+    rows: [
+      { label: 'Name', value: sub.name ?? 'Not given' },
+      { label: 'Contact', value: sub.email },
+      { label: 'Channels', value: channels || 'None selected' },
+      { label: 'Page', value: sub.sourcePath ?? 'Not recorded' },
+    ],
+    footnote: 'Sent by the Residency First EB-5 tracker.',
+  };
 
   return sendEmail({
     to: recipient(),
-    subject: `EB-5 updates signup: ${sub.email}`,
-    text: lines.join('\n'),
+    subject: `EB-5 updates signup: ${sub.email}`.replace(/[\r\n]+/g, ' ').slice(0, 200),
+    text: renderEmailText(email),
+    html: renderEmailHtml(email),
   });
 }
