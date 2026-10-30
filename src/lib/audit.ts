@@ -7,9 +7,20 @@ import type { CurrentUser } from './auth';
 type Db = Pick<typeof prisma, 'auditLog'> | Prisma.TransactionClient;
 
 type AuditInput = {
-  entity: 'Client' | 'Meeting' | 'Commission' | 'Document' | 'User';
+  entity: 'Client' | 'Meeting' | 'Commission' | 'Document' | 'User' | 'Article' | 'Newsletter' | 'UpdateSubscription';
   entityId: string;
-  action: 'created' | 'updated' | 'deleted' | 'status_changed' | 'uploaded' | 'imported' | 'signed_in';
+  action:
+    | 'created'
+    | 'updated'
+    | 'deleted'
+    | 'status_changed'
+    | 'uploaded'
+    | 'imported'
+    | 'signed_in'
+    | 'published'
+    | 'unpublished'
+    | 'sent'
+    | 'exported';
   field?: string;
   oldValue?: string | null;
   newValue?: string | null;

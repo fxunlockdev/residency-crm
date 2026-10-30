@@ -202,6 +202,60 @@
     @apply font-medium text-ink underline decoration-pink decoration-2 underline-offset-[3px]
            transition-colors duration-200 hover:text-pink-deep;
   }
+
+  /* Article preview ---------------------------------------------------
+     The website's own article markup, shown back to the author in this
+     app's typefaces. Scoped so it cannot leak into the CRM's own tables
+     and lists, and kept close to the site's rhythm so the preview is
+     worth trusting. */
+  .article-preview h2 {
+    @apply mt-7 font-serif text-lg font-medium text-ink first:mt-0;
+  }
+
+  .article-preview h3 {
+    @apply mt-6 font-serif text-base font-medium text-ink;
+  }
+
+  .article-preview p {
+    @apply mt-3 text-sm leading-relaxed text-ink-soft;
+  }
+
+  .article-preview ul {
+    @apply mt-3 list-disc space-y-1.5 pl-5 text-sm leading-relaxed text-ink-soft;
+  }
+
+  .article-preview ol {
+    @apply mt-3 list-decimal space-y-1.5 pl-5 text-sm leading-relaxed text-ink-soft;
+  }
+
+  .article-preview a {
+    @apply text-pink-deep underline;
+  }
+
+  .article-preview blockquote {
+    @apply mt-4 border-l-2 border-line-strong pl-4 text-sm italic leading-relaxed text-ink-mute;
+  }
+
+  .article-preview .table-wrap {
+    @apply mt-4 overflow-x-auto;
+  }
+
+  .article-preview table {
+    @apply w-full border-collapse text-sm;
+  }
+
+  .article-preview th,
+  .article-preview td {
+    @apply border-b border-line px-3 py-2 text-left align-top;
+  }
+
+  .article-preview th {
+    @apply text-xs font-semibold uppercase tracking-[0.07em] text-ink-mute;
+  }
+
+  .article-preview hr {
+    @apply mt-6 border-line;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

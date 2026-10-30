@@ -51,7 +51,7 @@ beforeAll(() => {
 beforeEach(async () => {
   await cleanUp();
   // No mail provider should be reached from a test.
-  vi.stubEnv('MAILERSEND_API_TOKEN', '');
+  vi.stubEnv('RESEND_API_KEY', '');
 });
 afterEach(() => vi.unstubAllEnvs());
 afterAll(async () => {

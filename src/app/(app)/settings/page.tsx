@@ -187,18 +187,18 @@ export default async function SettingsPage() {
                 .join(' · ')}
             />
             <IntegrationRow
-              name="Email, MailerSend"
-              connected={!!process.env.MAILERSEND_API_TOKEN}
+              name="Email, Resend"
+              connected={!!process.env.RESEND_API_KEY}
               detail={
-                process.env.MAILERSEND_API_TOKEN
-                  ? 'Enquiry alerts and the daily digest can be sent.'
-                  : 'Add MAILERSEND_API_TOKEN and ALERT_EMAIL_TO to send enquiry alerts and the daily digest.'
+                process.env.RESEND_API_KEY
+                  ? 'Enquiry alerts, the daily digest and the newsletter can all be sent.'
+                  : 'Add RESEND_API_KEY and ALERT_EMAIL_TO to send enquiry alerts, the daily digest and the newsletter.'
               }
             />
             <IntegrationRow
               name="EB-5 updates list"
-              connected={false}
-              detail="Signups are stored here with their consent. No sending platform is connected: pick a newsletter tool and export the list when you need to send."
+              connected={!!process.env.RESEND_API_KEY}
+              detail="Signups are stored under Updates list with the consent wording each person agreed to. Email goes out from Newsletter, with a per-subscriber unsubscribe link; WhatsApp is an export for now."
               extra={
                 subscriberCounts.total > 0
                   ? `${subscriberCounts.total} subscriber${subscriberCounts.total === 1 ? '' : 's'}`

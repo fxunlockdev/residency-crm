@@ -18,6 +18,10 @@ describe('middleware public paths', () => {
     // with LEAD_INTAKE_TOKEN.
     '/api/leads/intake',
     '/api/updates/subscribe',
+    '/api/updates/unsubscribe',
+    // Published articles, read by the website. Same token check.
+    '/api/public/articles',
+    '/api/public/articles/some-slug',
     '/api/health',
     // Authenticates with CRON_SECRET.
     '/api/cron/digest',
@@ -32,7 +36,13 @@ describe('middleware public paths', () => {
     });
   }
 
-  const guarded = ['/api/clients', '/api/admin/users', '/api/updates-not-a-real-prefix'];
+  const guarded = [
+    '/api/clients',
+    '/api/admin/users',
+    '/api/updates-not-a-real-prefix',
+    // A prefix match on '/api/public' must not open '/api/publicanything'.
+    '/api/publicity',
+  ];
 
   for (const path of guarded) {
     it(`still refuses a signed-out request to ${path}`, async () => {

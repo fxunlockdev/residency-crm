@@ -98,6 +98,8 @@ model User {
   meetings         Meeting[]
   documents        Document[]
   tablePreferences UserTablePreference[]
+  articles         Article[]             @relation("ArticleAuthor")
+  newsletters      Newsletter[]          @relation("NewsletterAuthor")
 }
 
 model RegionalCentre {
@@ -463,4 +465,96 @@ model UpdateSubscription {
   updatedAt DateTime @updatedAt
 
   @@index([createdAt])
+}
+
+enum ArticleStatus {
+  DRAFT
+  PUBLISHED
+}
+
+/// A news article written here and published to the public website.
+///
+/// The website renders these into the same markup as the articles that
+/// shipped with the design package, so the fields mirror what that markup
+/// needs rather than being a general-purpose CMS.
+model Article {
+  id   String @id @default(cuid())
+  /// The URL segment under /insights/. Immutable once published, because a
+  /// changed slug silently breaks every link already shared.
+  slug String @unique
+
+  status      ArticleStatus @default(DRAFT)
+  /// Set the first time it is published and kept across later edits, so an
+  /// amendment does not move an old article to the top of the list.
+  publishedAt DateTime?
+
+  /// Which filter button on /insights/ this sits behind. One of the four the
+  /// static page already renders; anything else would be filtered into
+  /// invisibility.
+  kind  String
+  /// The left half of the card's meta line, before the date.
+  topic String
+
+  title          String
+  /// The hero standfirst, also used as the card excerpt.
+  standfirst     String
+  /// Meta description and link previews.
+  seoDescription String
+
+  /// A key into the design package's own hero images. Stored as a key rather
+  /// than a path so an article can never introduce artwork the site never had.
+  heroImage String
+
+  /// What the author writes and edits.
+  bodyMarkdown String
+  /// Rendered and sanitised here, once, on save. The website inserts this
+  /// verbatim and never parses author input itself.
+  bodyHtml     String
+  /// Optional closing line of official sources.
+  sourceNote   String?
+
+  createdById String?
+  createdBy   User?   @relation("ArticleAuthor", fields: [createdById], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status, publishedAt])
+}
+
+enum NewsletterStatus {
+  DRAFT
+  SENDING
+  SENT
+  FAILED
+}
+
+/// One newsletter to the EB-5 updates list.
+model Newsletter {
+  id String @id @default(cuid())
+
+  subject   String
+  /// The grey line clients show beside the subject.
+  preheader String?
+
+  bodyMarkdown String
+  /// Email HTML, built at send time from the markdown.
+  bodyHtml     String
+
+  status NewsletterStatus @default(DRAFT)
+
+  /// Claimed when a send starts, so two clicks cannot send it twice.
+  sendStartedAt  DateTime?
+  sentAt         DateTime?
+  recipientCount Int       @default(0)
+  failureCount   Int       @default(0)
+  lastError      String?
+
+  createdById String?
+  createdBy   User?   @relation("NewsletterAuthor", fields: [createdById], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status, createdAt])
 }

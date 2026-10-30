@@ -11,18 +11,35 @@ export type Message = {
   /** Comma-separated. Defaults to ALERT_EMAIL_TO. */
   to?: string;
   replyTo?: string;
+  /** Extra MIME headers. The newsletter uses this for List-Unsubscribe. */
+  headers?: Record<string, string>;
 };
 
-/** MailerSend caps a single send at fifty recipients. */
-const MAX_RECIPIENTS = 50;
+/** Resend caps a single send at fifty recipients. */
+export const MAX_RECIPIENTS = 50;
+
+const ENDPOINT = 'https://api.resend.com/emails';
+const TIMEOUT_MS = 10_000;
+
+export function mailFrom(): string {
+  return process.env.ALERT_EMAIL_FROM?.trim() || 'crm@residencyfirst.com';
+}
+
+/** `Residency First <crm@residencyfirst.com>`, which is what Resend wants. */
+export function mailFromHeader(): string {
+  return `Residency First <${mailFrom()}>`;
+}
+
+export function resendKey(): string {
+  return process.env.RESEND_API_KEY?.trim() ?? '';
+}
+
+export function splitRecipients(list: string): string[] {
+  return [...new Set(list.split(',').map((address) => address.trim()).filter(Boolean))];
+}
 
 /**
- * The one way this app sends mail, through MailerSend.
- *
- * A marketing platform cannot do this job: its only send path is a campaign to
- * a list, which would mean creating a campaign object per enquiry and waiting
- * for a queue. Transactional mail also goes out on separate IP pools, so a
- * newsletter complaint cannot drag lead alerts into the junk folder.
+ * The one way this app sends mail, through Resend.
  *
  * Never throws. A notification failing must not turn a durable write into an
  * error for the visitor, so the caller gets a reason back and decides what to
@@ -38,48 +55,37 @@ export async function sendEmail(message: Message): Promise<SendResult> {
 }
 
 async function deliver(message: Message): Promise<SendResult> {
-  const token = process.env.MAILERSEND_API_TOKEN?.trim();
+  const key = resendKey();
   const to = message.to ?? process.env.ALERT_EMAIL_TO;
-  const from = process.env.ALERT_EMAIL_FROM?.trim() || 'crm@residencyfirst.com';
 
-  if (!token || !to) {
-    return { sent: false, skipped: true, reason: 'MAILERSEND_API_TOKEN or ALERT_EMAIL_TO is not set.' };
+  if (!key || !to) {
+    return { sent: false, skipped: true, reason: 'RESEND_API_KEY or ALERT_EMAIL_TO is not set.' };
   }
 
-  const recipients = to
-    .split(',')
-    .map((address) => address.trim())
-    .filter(Boolean)
-    .slice(0, MAX_RECIPIENTS)
-    .map((email) => ({ email }));
-
+  const recipients = splitRecipients(to).slice(0, MAX_RECIPIENTS);
   if (recipients.length === 0) {
     return { sent: false, skipped: true, reason: 'No recipient address configured.' };
   }
 
-  const response = await fetch('https://api.mailersend.com/v1/email', {
+  const response = await fetch(ENDPOINT, {
     method: 'POST',
     // Node has no default timeout: a hung provider would hold the request open.
-    signal: AbortSignal.timeout(10_000),
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-      'X-Requested-With': 'XMLHttpRequest',
-    },
+    signal: AbortSignal.timeout(TIMEOUT_MS),
+    headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      from: { email: from, name: 'Residency First' },
+      from: mailFromHeader(),
       to: recipients,
       subject: message.subject,
       text: message.text,
       ...(message.html ? { html: message.html } : {}),
-      ...(message.replyTo ? { reply_to: { email: message.replyTo } } : {}),
+      ...(message.replyTo ? { reply_to: message.replyTo } : {}),
+      ...(message.headers ? { headers: message.headers } : {}),
     }),
   });
 
-  // MailerSend queues the message and answers 202 with an empty body.
   if (!response.ok) {
     const detail = await response.text().catch(() => '');
-    return { sent: false, reason: `MailerSend returned ${response.status}${detail ? `: ${detail.slice(0, 200)}` : ''}.` };
+    return { sent: false, reason: `Resend returned ${response.status}${detail ? `: ${detail.slice(0, 200)}` : ''}.` };
   }
   return { sent: true };
 }

@@ -8,7 +8,7 @@ export async function getNavCounts() {
   const today = todayUtc();
   const endOfToday = new Date(today.getTime() + 86_400_000 - 1);
 
-  const [followUps, commissionsNeedingAction, activeClients] = await Promise.all([
+  const [followUps, commissionsNeedingAction, activeClients, updateSubscribers] = await Promise.all([
     prisma.client.count({
       where: { status: { in: ACTIVE_STATUSES }, followUpDate: { not: null, lte: endOfToday } },
     }),
@@ -20,7 +20,8 @@ export async function getNavCounts() {
       },
     }),
     prisma.client.count({ where: { status: { in: ACTIVE_STATUSES } } }),
+    prisma.updateSubscription.count({ where: { unsubscribedAt: null } }),
   ]);
 
-  return { followUps, commissionsNeedingAction, activeClients };
+  return { followUps, commissionsNeedingAction, activeClients, updateSubscribers };
 }

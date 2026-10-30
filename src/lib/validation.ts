@@ -223,3 +223,51 @@ export function fieldErrors(error: z.ZodError): Record<string, string> {
 }
 
 export { optionalDateTime };
+
+/**
+ * Article slugs the published site already serves as static files. The
+ * website gives those files priority, so an article filed under one of these
+ * would save, look published here, and never appear to a reader.
+ */
+export const RESERVED_ARTICLE_SLUGS = Object.freeze([
+  'child-status-protection',
+  'eb5-fees-investment-changes-2026-2027',
+  'gold-card-and-eb5',
+  'source-of-funds',
+  'visa-bulletin-october-2026',
+]);
+
+export const articleSchema = z.object({
+  slug: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .min(3, 'Enter a web address for this article.')
+    .max(80, 'Keep the web address under 80 characters.')
+    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'Use lowercase letters, numbers and single hyphens.')
+    .refine((value) => !RESERVED_ARTICLE_SLUGS.includes(value), {
+      message: 'An article already published on the site uses that address.',
+    }),
+  title: z.string().trim().min(8, 'Give the article a headline.').max(160, 'Keep the headline under 160 characters.'),
+  kind: z.enum(['News analysis', 'Investor guidance', 'Policy explainer']),
+  topic: z.string().trim().min(2, 'Name the topic shown beside the date.').max(60, 'Keep the topic under 60 characters.'),
+  standfirst: z
+    .string()
+    .trim()
+    .min(20, 'Write the one-line summary that sits under the headline.')
+    .max(300, 'Keep the summary under 300 characters.'),
+  seoDescription: z
+    .string()
+    .trim()
+    .min(50, 'Write the search description, around 150 characters.')
+    .max(320, 'Keep the search description under 320 characters.'),
+  heroImage: z.enum(['new-york', 'family', 'campus', 'pacific']),
+  bodyMarkdown: z.string().trim().min(200, 'The article body is too short to publish.').max(80_000),
+  sourceNote: optionalText(1200),
+});
+
+export const newsletterSchema = z.object({
+  subject: z.string().trim().min(5, 'Give the email a subject line.').max(160, 'Keep the subject under 160 characters.'),
+  preheader: optionalText(200),
+  bodyMarkdown: z.string().trim().min(40, 'Write something to send.').max(80_000),
+});

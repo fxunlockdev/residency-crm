@@ -76,6 +76,69 @@ It stores the GCLID and UTM parameters in a first-party cookie for 90 days, and 
 writes that cookie once Google Consent Mode v2 reports `analytics_storage` as granted.
 A record that arrives with a GCLID is marked Google Ads automatically.
 
+## The website's news section
+
+Articles written here appear on the public marketing site at
+`residencyfirst.com/insights/`, alongside the five that shipped with the
+design.
+
+| Where | What |
+|---|---|
+| **News & insights** | Write, preview and publish. A draft is invisible to the public; publishing is a separate, deliberate action from saving |
+| `GET /api/public/articles` | The published list, for the website |
+| `GET /api/public/articles/<slug>` | One article, with its rendered body |
+
+Both endpoints require `x-rf-token: $LEAD_INTAKE_TOKEN`, the same shared
+secret the website already uses to post enquiries.
+
+The markdown is rendered to HTML **here**, on save, with marked and a
+sanitize-html allowlist matching the design's own vocabulary, and stored in
+`Article.bodyHtml`. The website inserts that HTML verbatim and never parses
+author input. A hero image is picked from four the design already ships, with
+the alt text and caption they are already published with, so an article
+cannot introduce artwork the site never had.
+
+A published slug cannot change: it is already in links, bookmarks and search
+results. The five slugs the package ships are reserved, because a static file
+on the website always wins and an article filed under one would look
+published here and be invisible to a reader.
+
+## The EB-5 updates list
+
+The signup on the website writes straight into **Updates list**. A subscriber
+chooses WhatsApp, email or both, so either contact detail may be absent and
+the two channels are counted and filtered separately.
+
+- **Updates list** shows everyone, filterable by channel and status, with the
+  consent wording each person agreed to and when.
+- **Export CSV** gives the filtered segment as a spreadsheet. Until the CRM
+  can send WhatsApp itself, this is how a WhatsApp broadcast gets its
+  recipients. The download is signed in and logged.
+- **Newsletter** writes and sends to the email segment through Resend's batch
+  endpoint, a hundred separately addressed messages per call, each carrying
+  that subscriber's own unsubscribe link and the RFC 8058 headers Gmail and
+  Outlook expect.
+
+An unsubscribe is recorded here, not at the provider: two copies of a consent
+record is two answers to "did they unsubscribe", and the wrong one eventually
+wins. `POST /api/updates/unsubscribe` takes the token and answers the same way
+whether or not it matched, so it cannot be used to guess another subscriber's.
+
+A sent newsletter is kept as a record of what subscribers were told, and
+cannot be edited or deleted.
+
+## Mail
+
+Everything goes out through Resend.
+
+| Variable | Used for |
+|---|---|
+| `RESEND_API_KEY` | All mail. Without it nothing is sent and the reason is logged, rather than a failure being reported as a success |
+| `ALERT_EMAIL_FROM` | The sending address, on a domain verified at Resend |
+| `ALERT_EMAIL_TO` | The daily digest. Comma-separated, up to fifty |
+| `LEAD_NOTIFY_TO` | Enquiry alerts. Falls back to `ALERT_EMAIL_TO` |
+| `PUBLIC_SITE_URL` | Where unsubscribe links point. Defaults to `https://www.residencyfirst.com` |
+
 ## Scheduled jobs
 
 | Path | Purpose |

@@ -9,6 +9,9 @@ const PUBLIC_PREFIXES = [
   // LEAD_INTAKE_TOKEN itself, and without this the middleware 401s it before
   // the route ever runs.
   '/api/updates',
+  // Published articles for the public website. Checks LEAD_INTAKE_TOKEN
+  // itself, same as the two above.
+  '/api/public',
   '/api/health',
   // Cron routes authenticate themselves with CRON_SECRET; without this the
   // middleware 401s the scheduler before the route ever runs.

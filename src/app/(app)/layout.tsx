@@ -43,6 +43,14 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       ],
     },
     {
+      heading: 'Website',
+      items: [
+        { href: '/insights', label: 'News & insights' },
+        { href: '/subscribers', label: 'Updates list', badge: counts.updateSubscribers },
+        { href: '/newsletter', label: 'Newsletter' },
+      ],
+    },
+    {
       heading: 'Admin',
       items: [{ href: '/settings', label: 'Settings' }],
     },
