@@ -50,8 +50,7 @@ beforeAll(() => {
 });
 beforeEach(async () => {
   await cleanUp();
-  // Neither provider should be reached from a test.
-  vi.stubEnv('MAILERLITE_API_KEY', '');
+  // No mail provider should be reached from a test.
   vi.stubEnv('MAILERSEND_API_TOKEN', '');
 });
 afterEach(() => vi.unstubAllEnvs());

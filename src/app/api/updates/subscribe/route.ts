@@ -6,7 +6,6 @@ import { normalizeEmail, normalizePhone } from '@/lib/normalize';
 import { pruneRateLimits, rateLimitSafe } from '@/lib/rate-limit';
 import { clientIpFrom, safeEqual } from '@/lib/client-ip';
 import { sendSubscriptionNotification } from '@/lib/lead-notification';
-import { syncSubscriber } from '@/lib/mailerlite';
 import { afterResponse } from '@/lib/after-response';
 
 export const dynamic = 'force-dynamic';
@@ -143,53 +142,19 @@ export async function POST(request: NextRequest) {
       });
 
   afterResponse(async () => {
-    // The row is already committed, so both of these are best effort. The
-    // MailerLite outcome is written back so a failed sync is visible in the
-    // CRM rather than quietly losing a subscriber.
-    const [notification, sync] = await Promise.all([
-      sendSubscriptionNotification({
-        name: subscription.name,
-        email: subscription.email ?? subscription.phone ?? 'no contact detail',
-        consentEmail: subscription.consentEmail,
-        consentWhatsapp: subscription.consentWhatsapp,
-        sourcePath: subscription.sourcePath,
-      }),
-      syncSubscriber({
-        email: subscription.email,
-        phone: subscription.phone,
-        name: subscription.name,
-        consentEmail: subscription.consentEmail,
-        consentWhatsapp: subscription.consentWhatsapp,
-        consentAt,
-      }),
-    ]);
+    // The row is already committed, so this is best effort.
+    const notification = await sendSubscriptionNotification({
+      name: subscription.name,
+      email: subscription.email ?? subscription.phone ?? 'no contact detail',
+      consentEmail: subscription.consentEmail,
+      consentWhatsapp: subscription.consentWhatsapp,
+      sourcePath: subscription.sourcePath,
+    });
 
     if (!notification.sent) {
       const message = `Subscription alert not sent for ${subscription.id}: ${notification.reason}`;
       if (notification.skipped) console.warn(message);
       else console.error(message);
-    }
-
-    await prisma.updateSubscription
-      .update({
-        where: { id: subscription.id },
-        data: {
-          // Only ever set on success. Writing null on a later transient
-          // failure would erase a timestamp that was true, and claim the
-          // subscriber was never synced when they were.
-          ...(sync.synced ? { mailerliteSyncedAt: new Date() } : {}),
-          // A skip is not a failure: MailerLite may simply not be configured,
-          // or this may be a WhatsApp-only subscriber with no email to sync.
-          // Recording those as errors would make the settings page cry wolf.
-          mailerliteError: sync.synced || sync.skipped ? null : (sync.reason ?? null),
-        },
-      })
-      .catch((error: unknown) => {
-        console.error(`Could not record the MailerLite sync for ${subscription.id}:`, error);
-      });
-
-    if (!sync.synced && !sync.skipped) {
-      console.error(`MailerLite sync failed for ${subscription.id}: ${sync.reason}`);
     }
   });
 

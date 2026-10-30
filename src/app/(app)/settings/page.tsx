@@ -19,7 +19,7 @@ export const dynamic = 'force-dynamic';
 export default async function SettingsPage() {
   const actor = await requireRole('ADMIN');
 
-  const [users, centres, projects, quality, conversionCounts, subscriberTotal, subscriberFailed] =
+  const [users, centres, projects, quality, conversionCounts, subscriberTotal] =
     await Promise.all([
       prisma.user.findMany({ orderBy: [{ isActive: 'desc' }, { name: 'asc' }] }),
       prisma.regionalCentre.findMany({ orderBy: { name: 'asc' }, include: { _count: { select: { clients: true } } } }),
@@ -30,10 +30,9 @@ export default async function SettingsPage() {
       getDataQuality(),
       prisma.conversionEvent.groupBy({ by: ['status'], _count: { _all: true } }),
       prisma.updateSubscription.count({ where: { unsubscribedAt: null } }),
-      prisma.updateSubscription.count({ where: { unsubscribedAt: null, mailerliteError: { not: null } } }),
     ]);
 
-  const subscriberCounts = { total: subscriberTotal, failed: subscriberFailed };
+  const subscriberCounts = { total: subscriberTotal };
 
   const appUrl = process.env.APP_URL ?? 'https://crm.residencyfirst.com';
   const adsReady = isAdsConfigured();
@@ -197,17 +196,12 @@ export default async function SettingsPage() {
               }
             />
             <IntegrationRow
-              name="Updates list, MailerLite"
-              connected={!!process.env.MAILERLITE_API_KEY}
-              detail={
-                process.env.MAILERLITE_API_KEY
-                  ? 'Deadline-updates signups are pushed to MailerLite as well as stored here.'
-                  : 'Add MAILERLITE_API_KEY to push signups to MailerLite. They are stored here either way.'
-              }
+              name="EB-5 updates list"
+              connected={false}
+              detail="Signups are stored here with their consent. No sending platform is connected: pick a newsletter tool and export the list when you need to send."
               extra={
                 subscriberCounts.total > 0
-                  ? `${subscriberCounts.total} subscriber${subscriberCounts.total === 1 ? '' : 's'}` +
-                    (subscriberCounts.failed > 0 ? ` · ${subscriberCounts.failed} not synced` : '')
+                  ? `${subscriberCounts.total} subscriber${subscriberCounts.total === 1 ? '' : 's'}`
                   : undefined
               }
             />

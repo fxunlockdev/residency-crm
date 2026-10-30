@@ -428,6 +428,10 @@ enum Readiness {
 /// The EB-5 news and deadline list. Kept apart from Client on purpose: asking
 /// for a newsletter is not an enquiry, and the handover is explicit that one
 /// must never be treated as the other.
+///
+/// This table is the only record of the list. There is no sending platform
+/// wired up: MailerSend is transactional and cannot run a campaign. Export
+/// from here when a newsletter tool is chosen.
 model UpdateSubscription {
   /// A subscriber picks WhatsApp, email, or both, so either contact detail may
   /// be absent. Postgres allows repeated NULLs in a unique index, so these stay
@@ -454,11 +458,6 @@ model UpdateSubscription {
   /// another's link and opt them out.
   unsubscribeToken String    @unique
   unsubscribedAt   DateTime?
-
-  /// Outcome of the push to MailerLite. This table is the durable record, so a
-  /// failed sync is recorded rather than lost and can be retried.
-  mailerliteSyncedAt DateTime?
-  mailerliteError    String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

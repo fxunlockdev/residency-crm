@@ -19,9 +19,10 @@ const MAX_RECIPIENTS = 50;
 /**
  * The one way this app sends mail, through MailerSend.
  *
- * MailerLite, the marketing side, has no single-send endpoint: campaigns go to
- * lists, not to one address on demand. MailerSend is its transactional sibling
- * and shares the same account.
+ * A marketing platform cannot do this job: its only send path is a campaign to
+ * a list, which would mean creating a campaign object per enquiry and waiting
+ * for a queue. Transactional mail also goes out on separate IP pools, so a
+ * newsletter complaint cannot drag lead alerts into the junk folder.
  *
  * Never throws. A notification failing must not turn a durable write into an
  * error for the visitor, so the caller gets a reason back and decides what to
